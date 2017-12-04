@@ -5,7 +5,8 @@ plugins {
     id 'eclipse'
 }
 
-version = '0.16-SNAPSHOT'
+version = '0.16.1-LIB'
+archivesBaseName = 'bitcoinj-core'
 
 dependencies {
     compile 'org.bouncycastle:bcprov-jdk15on:1.60'
