@@ -152,7 +152,7 @@ public class Script {
                 return Arrays.copyOf(program, program.length);
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             for (ScriptChunk chunk : chunks) {
-                chunk.write(bos);
+                bos.write(chunk.toByteArray());
             }
             program = bos.toByteArray();
             return program;

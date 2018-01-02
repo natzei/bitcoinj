@@ -19,10 +19,10 @@ package org.bitcoinj.script;
 
 import org.bitcoinj.core.Utils;
 import com.google.common.base.Objects;
+import com.google.common.primitives.Bytes;
 
 import javax.annotation.Nullable;
-import java.io.IOException;
-import java.io.OutputStream;
+import java.util.ArrayList;
 import java.util.Arrays;
 
 import static com.google.common.base.Preconditions.checkState;
@@ -121,33 +121,37 @@ public class ScriptChunk {
         return opcode == OP_PUSHDATA4;
     }
 
-    public void write(OutputStream stream) throws IOException {
+    public byte[] toByteArray() {
         if (isOpCode()) {
             checkState(data == null);
-            stream.write(opcode);
+            return new byte[]{ (byte) opcode };
         } else if (data != null) {
+            ArrayList<Byte> res = new ArrayList<>();
             if (opcode < OP_PUSHDATA1) {
                 checkState(data.length == opcode);
-                stream.write(opcode);
+                res.add((byte) opcode);
             } else if (opcode == OP_PUSHDATA1) {
                 checkState(data.length <= 0xFF);
-                stream.write(OP_PUSHDATA1);
-                stream.write(data.length);
+                res.add((byte) OP_PUSHDATA1);
+                res.add((byte) data.length);
             } else if (opcode == OP_PUSHDATA2) {
                 checkState(data.length <= 0xFFFF);
-                stream.write(OP_PUSHDATA2);
-                stream.write(0xFF & data.length);
-                stream.write(0xFF & (data.length >> 8));
+                res.add((byte) OP_PUSHDATA2);
+                res.add((byte) (0xFF & data.length));
+                res.add((byte) (0xFF & (data.length >> 8)));
             } else if (opcode == OP_PUSHDATA4) {
                 checkState(data.length <= Script.MAX_SCRIPT_ELEMENT_SIZE);
-                stream.write(OP_PUSHDATA4);
-                Utils.uint32ToByteStreamLE(data.length, stream);
+                res.add((byte) OP_PUSHDATA4);
+                res.add((byte) (0xFF & data.length));
+                res.add((byte) (0xFF & (data.length >> 8)));
+                res.add((byte) (0xFF & (data.length >> 16)));
+                res.add((byte) (0xFF & (data.length >> 24)));
             } else {
                 throw new RuntimeException("Unimplemented");
             }
-            stream.write(data);
+            return Bytes.concat(Bytes.toArray(res), data);
         } else {
-            stream.write(opcode); // smallNum
+            return new byte[] { (byte) opcode }; // smallNum
         }
     }
 
