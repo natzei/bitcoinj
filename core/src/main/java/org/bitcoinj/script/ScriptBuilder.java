@@ -77,37 +77,12 @@ public class ScriptBuilder {
 
     /** Adds a copy of the given byte array as a data element (i.e. PUSHDATA) at the end of the program. */
     public ScriptBuilder data(byte[] data) {
-        if (data.length == 0)
-            return smallNum(0);
-        if (data.length == 1)
-            return number(data[0]);
-        else
-            return data(chunks.size(), data);
+        return data(chunks.size(), data);
     }
 
     /** Adds a copy of the given byte array as a data element (i.e. PUSHDATA) at the given index in the program. */
     public ScriptBuilder data(int index, byte[] data) {
-        // implements BIP62
-        byte[] copy = Arrays.copyOf(data, data.length);
-        int opcode;
-        if (data.length == 0) {
-            opcode = OP_0;
-        } else if (data.length == 1) {
-            byte b = data[0];
-            if (b >= 1 && b <= 16)
-                opcode = OP_1 - 1 + b;
-            else
-                opcode = 1;
-        } else if (data.length < OP_PUSHDATA1) {
-            opcode = data.length;
-        } else if (data.length < 256) {
-            opcode = OP_PUSHDATA1;
-        } else if (data.length < 65536) {
-            opcode = OP_PUSHDATA2;
-        } else {
-            throw new RuntimeException("Unimplemented");
-        }
-        return addChunk(index, new ScriptChunk(opcode, copy));
+        return addChunk(index, ScriptChunk.getPushDataOperation(data));
     }
 
     /**

@@ -210,4 +210,42 @@ public class ScriptChunk {
     public int hashCode() {
         return Objects.hashCode(opcode, startLocationInProgram, Arrays.hashCode(data));
     }
+
+    /**
+     * Return a script chunk operation that pushes the given data on the stack.
+     * <p>{@link ScriptChunk#isPushData()} and
+     * {@link ScriptChunk#isShortestPossiblePushData()} always return {@code true}.</p>
+     * @param data a byte array to push
+     * @return a script chunk operation that pushes the given data on the stack.
+     */
+    public static ScriptChunk getPushDataOperation(byte[] data) {
+        byte[] copy = Arrays.copyOf(data, data.length);
+        int opcode;
+        if (data.length == 0) {
+            opcode = OP_0;
+            copy = null;
+        } else if (data.length == 1) {
+            byte b = data[0];
+            if (b >= 1 && b <= 16) {
+                opcode = ScriptOpCodes.encodeOpN(b);
+                copy = null;
+            }
+            else
+                opcode = 1;
+        } else if (data.length < OP_PUSHDATA1) {
+            opcode = data.length;
+        } else if (data.length <= 0xFF) {
+            opcode = OP_PUSHDATA1;
+        } else if (data.length <= 0xFFFF) {
+            opcode = OP_PUSHDATA2;
+        } else if (data.length <= 0xFFFF_FFFF) {
+            opcode = OP_PUSHDATA4;
+        } else {
+            throw new RuntimeException("Unimplemented");
+        }
+        ScriptChunk ch =  new ScriptChunk(opcode, copy);
+        checkState(ch.isPushData());
+        checkState(ch.isShortestPossiblePushData());
+        return ch;
+    }
 }
