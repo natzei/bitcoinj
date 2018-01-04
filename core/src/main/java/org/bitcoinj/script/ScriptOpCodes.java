@@ -20,6 +20,8 @@ import com.google.common.collect.ImmutableMap;
 
 import java.util.Map;
 
+import static com.google.common.base.Preconditions.*;
+
 /**
  * Various constants that define the assembly-like scripting language that forms part of the Bitcoin protocol.
  * See {@link org.bitcoinj.script.Script} for details. Also provides a method to convert them to a string.
@@ -420,5 +422,33 @@ public class ScriptOpCodes {
             return opCodeNameMap.get(opCodeName);
 
         return OP_INVALIDOPCODE;
+    }
+
+    /**
+     * Get the opcode that pushes n.
+     * @param n a number between -1 and 16 (inclusive)
+     * @return the opcode that pushes n
+     */
+    public static int encodeOpN(int n) {
+        checkArgument(-1 <= n && n <= 16, n + " must be between -1 and 16 (inclusive).");
+        if (n == 0)
+            return OP_0;
+        if (n == -1)
+            return OP_1NEGATE;
+        return OP_1 - 1 + n;
+    }
+
+    /**
+     * Get the number pushed by the given opcode.
+     * @param opcode OP_0, OP_1NEGATE or between OP_1 and OP_16 (inclusive)
+     * @return the opcode that pushes n
+     */
+    public static int decodeOpN(int opcode) {
+        checkArgument(opcode == OP_0 || opcode == OP_1NEGATE || (OP_1 <= opcode && opcode <= OP_16), "invalid opcode "+ScriptOpCodes.getOpCodeName(opcode)+". It must be OP_0, OP_1NEGATE or between OP_1 and OP_16 (inclusive).");
+        if (opcode == OP_0)
+            return 0;
+        if (opcode == OP_1NEGATE)
+            return -1;
+        return opcode + 1 - OP_1;
     }
 }

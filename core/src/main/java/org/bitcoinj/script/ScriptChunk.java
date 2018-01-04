@@ -46,7 +46,7 @@ public class ScriptChunk {
     public ScriptChunk(int opcode, byte[] data) {
         this(opcode, data, -1);
         if (isPushData() && (opcode == OP_0 || opcode == OP_1NEGATE || (opcode >= OP_1 && opcode <= OP_16)))
-            checkArgument(data == null, "Data must be null for opcode "+opcode);
+            checkArgument(data == null, "Data must be null for opcode "+ScriptOpCodes.getOpCodeName(opcode));
     }
 
     public ScriptChunk(int opcode, byte[] data, int startLocationInProgram) {
@@ -94,7 +94,7 @@ public class ScriptChunk {
         if (opcode == OP_1NEGATE)
             return BigInteger.ONE.negate();
         if (opcode >= OP_1 && opcode <= OP_16)
-            return BigInteger.valueOf(opcode + 1 - OP_1);
+            return BigInteger.valueOf(ScriptOpCodes.decodeOpN(opcode));
         return Utils.decodeMPI(Utils.reverseBytes(data), false);
     }
 
@@ -113,18 +113,12 @@ public class ScriptChunk {
      * Returns true if this chunk is pushdata content, including the single-byte pushdatas.
      */
     public boolean isPushData() {
-        return opcode <= OP_16;
+        return opcode <= OP_16 && opcode != OP_RESERVED;
     }
 
     public int getStartLocationInProgram() {
         checkState(startLocationInProgram >= 0);
         return startLocationInProgram;
-    }
-
-    /** If this chunk is an OP_N opcode returns the equivalent integer value. */
-    public int decodeOpN() {
-        checkState(isOpCode());
-        return Script.decodeFromOpN(opcode);
     }
 
     /**
@@ -198,7 +192,7 @@ public class ScriptChunk {
             buf.append(getPushDataName(opcode)).append("[").append(Utils.HEX.encode(data)).append("]");
         } else {
             // Small num
-            buf.append(Script.decodeFromOpN(opcode));
+            buf.append(getDataValue());
         }
         return buf.toString();
     }

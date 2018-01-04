@@ -79,6 +79,8 @@ public class ScriptBuilder {
     public ScriptBuilder data(byte[] data) {
         if (data.length == 0)
             return smallNum(0);
+        if (data.length == 1)
+            return number(data[0]);
         else
             return data(chunks.size(), data);
     }
@@ -93,7 +95,7 @@ public class ScriptBuilder {
         } else if (data.length == 1) {
             byte b = data[0];
             if (b >= 1 && b <= 16)
-                opcode = Script.encodeToOpN(b);
+                opcode = OP_1 - 1 + b;
             else
                 opcode = 1;
         } else if (data.length < OP_PUSHDATA1) {
@@ -123,7 +125,7 @@ public class ScriptBuilder {
     public ScriptBuilder number(int index, long num) {
         if (num == -1) {
             return op(index, OP_1NEGATE);
-        } else if (num >= 0 && num <= 16) {
+        } else if (num >= -1 && num <= 16) {
             return smallNum(index, (int) num);
         } else {
             return bigNum(index, num);
@@ -160,7 +162,7 @@ public class ScriptBuilder {
     public ScriptBuilder smallNum(int index, int num) {
         checkArgument(num >= 0, "Cannot encode negative numbers with smallNum");
         checkArgument(num <= 16, "Cannot encode numbers larger than 16 with smallNum");
-        return addChunk(index, new ScriptChunk(Script.encodeToOpN(num), null));
+        return addChunk(index, new ScriptChunk(ScriptOpCodes.encodeOpN(num), null));
     }
 
     /**

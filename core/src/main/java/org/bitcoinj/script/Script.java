@@ -402,11 +402,11 @@ public class Script {
         }
         try {
             ByteArrayOutputStream bits = new ByteArrayOutputStream();
-            bits.write(encodeToOpN(threshold));
+            bits.write(ScriptOpCodes.encodeOpN(threshold));
             for (ECKey key : pubkeys) {
                 writeBytes(bits, key.getPubKey());
             }
-            bits.write(encodeToOpN(pubkeys.size()));
+            bits.write(ScriptOpCodes.encodeOpN(pubkeys.size()));
             bits.write(OP_CHECKMULTISIG);
             return bits.toByteArray();
         } catch (IOException e) {
@@ -504,7 +504,7 @@ public class Script {
 
     private int findKeyInRedeem(ECKey key) {
         checkArgument(chunks.get(0).isOpCode()); // P2SH scriptSig
-        int numKeys = Script.decodeFromOpN(chunks.get(chunks.size() - 2).getOpcode());
+        int numKeys = ScriptOpCodes.decodeOpN(chunks.get(chunks.size() - 2).getOpcode());
         for (int i = 0 ; i < numKeys ; i++) {
             if (Arrays.equals(chunks.get(1 + i).getData(), key.getPubKey())) {
                 return i;
@@ -524,7 +524,7 @@ public class Script {
             throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Only usable for multisig scripts.");
 
         ArrayList<ECKey> result = Lists.newArrayList();
-        int numKeys = Script.decodeFromOpN(chunks.get(chunks.size() - 2).getOpcode());
+        int numKeys = ScriptOpCodes.decodeOpN(chunks.get(chunks.size() - 2).getOpcode());
         for (int i = 0 ; i < numKeys ; i++)
             result.add(ECKey.fromPublicOnly(chunks.get(1 + i).getData()));
         return result;
@@ -532,7 +532,7 @@ public class Script {
 
     private int findSigInRedeem(byte[] signatureBytes, Sha256Hash hash) {
         checkArgument(chunks.get(0).isOpCode()); // P2SH scriptSig
-        int numKeys = Script.decodeFromOpN(chunks.get(chunks.size() - 2).getOpcode());
+        int numKeys = ScriptOpCodes.decodeOpN(chunks.get(chunks.size() - 2).getOpcode());
         TransactionSignature signature = TransactionSignature.decodeFromBitcoin(signatureBytes, true);
         for (int i = 0 ; i < numKeys ; i++) {
             if (ECKey.fromPublicOnly(chunks.get(i + 1).getData()).verify(hash, signature)) {
@@ -560,7 +560,7 @@ public class Script {
                 case OP_CHECKMULTISIG:
                 case OP_CHECKMULTISIGVERIFY:
                     if (accurate && lastOpCode >= OP_1 && lastOpCode <= OP_16)
-                        sigOps += decodeFromOpN(lastOpCode);
+                        sigOps += ScriptOpCodes.decodeOpN(lastOpCode);
                     else
                         sigOps += 20;
                     break;
@@ -571,26 +571,6 @@ public class Script {
             }
         }
         return sigOps;
-    }
-
-    static int decodeFromOpN(int opcode) {
-        checkArgument((opcode == OP_0 || opcode == OP_1NEGATE) || (opcode >= OP_1 && opcode <= OP_16), "decodeFromOpN called on non OP_N opcode");
-        if (opcode == OP_0)
-            return 0;
-        else if (opcode == OP_1NEGATE)
-            return -1;
-        else
-            return opcode + 1 - OP_1;
-    }
-
-    static int encodeToOpN(int value) {
-        checkArgument(value >= -1 && value <= 16, "encodeToOpN called for " + value + " which we cannot encode in an opcode.");
-        if (value == 0)
-            return OP_0;
-        else if (value == -1)
-            return OP_1NEGATE;
-        else
-            return value - 1 + OP_1;
     }
 
     /**
@@ -632,7 +612,7 @@ public class Script {
         if (isSentToMultiSig()) {
             // for N of M CHECKMULTISIG script we will need N signatures to spend
             ScriptChunk nChunk = chunks.get(0);
-            return Script.decodeFromOpN(nChunk.getOpcode());
+            return ScriptOpCodes.decodeOpN(nChunk.getOpcode());
         } else if (isSentToAddress() || isSentToRawPubKey()) {
             // pay-to-address and pay-to-pubkey require single sig
             return 1;
@@ -869,15 +849,12 @@ public class Script {
                     opcode == OP_MOD || opcode == OP_LSHIFT || opcode == OP_RSHIFT)
                 throw new ScriptException(ScriptError.SCRIPT_ERR_DISABLED_OPCODE, "Script included a disabled Script Op.");
 
-            if (shouldExecute && OP_0 <= opcode && opcode <= OP_PUSHDATA4) {
+            if (shouldExecute && chunk.isPushData()) {
                 // Check minimal push
                 if (verifyFlags.contains(VerifyFlag.MINIMALDATA) && !chunk.isShortestPossiblePushData())
                     throw new ScriptException(ScriptError.SCRIPT_ERR_MINIMALDATA, "Script included a not minimal push operation.");
 
-                if (opcode == OP_0)
-                    stack.add(new byte[]{});
-                else
-                    stack.add(chunk.getData());
+                stack.add(chunk.getData());
             } else if (shouldExecute || (OP_IF <= opcode && opcode <= OP_ENDIF)){
 
                 switch (opcode) {
@@ -909,29 +886,6 @@ public class Script {
                         throw new ScriptException(ScriptError.SCRIPT_ERR_UNBALANCED_CONDITIONAL, "Attempted OP_ENDIF without OP_IF/NOTIF");
                     ifStack.pollLast();
                     continue;
-
-                // OP_0 is no opcode
-                case OP_1NEGATE:
-                    stack.add(Utils.reverseBytes(Utils.encodeMPI(BigInteger.ONE.negate(), false)));
-                    break;
-                case OP_1:
-                case OP_2:
-                case OP_3:
-                case OP_4:
-                case OP_5:
-                case OP_6:
-                case OP_7:
-                case OP_8:
-                case OP_9:
-                case OP_10:
-                case OP_11:
-                case OP_12:
-                case OP_13:
-                case OP_14:
-                case OP_15:
-                case OP_16:
-                    stack.add(Utils.reverseBytes(Utils.encodeMPI(BigInteger.valueOf(decodeFromOpN(opcode)), false)));
-                    break;
                 case OP_NOP:
                     break;
                 case OP_VERIFY:
