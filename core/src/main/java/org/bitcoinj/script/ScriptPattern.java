@@ -31,8 +31,8 @@ public class ScriptPattern {
         return chunks.size() == 5 &&
                chunks.get(0).equalsOpCode(OP_DUP) &&
                chunks.get(1).equalsOpCode(OP_HASH160) &&
-               chunks.get(2).data != null &&
-               chunks.get(2).data.length == Address.LENGTH &&
+               chunks.get(2).getData() != null &&
+               chunks.get(2).getData().length == Address.LENGTH &&
                chunks.get(3).equalsOpCode(OP_EQUALVERIFY) &&
                chunks.get(4).equalsOpCode(OP_CHECKSIG);
     }
@@ -45,9 +45,9 @@ public class ScriptPattern {
         // equivalent like OP_HASH160 OP_PUSHDATA1 0x14 <20 bytes of script hash> OP_EQUAL
         return chunks.size() == 3 &&
                chunks.get(0).equalsOpCode(OP_HASH160) &&
-               chunks.get(1).opcode == 0x14 &&
-               chunks.get(1).data != null &&
-               chunks.get(1).data.length == Address.LENGTH &&
+               chunks.get(1).getOpcode() == 0x14 &&
+               chunks.get(1).getData() != null &&
+               chunks.get(1).getData().length == Address.LENGTH &&
                chunks.get(2).equalsOpCode(OP_EQUAL);
     }
 
@@ -55,8 +55,8 @@ public class ScriptPattern {
         return chunks.size() == 2 &&
                chunks.get(1).equalsOpCode(OP_CHECKSIG) &&
                !chunks.get(0).isOpCode() &&
-               chunks.get(0).data != null &&
-               chunks.get(0).data.length > 1;
+               chunks.get(0).getData() != null &&
+               chunks.get(0).getData().length > 1;
     }
 
     public static boolean isSentToMultisig(List<ScriptChunk> chunks) {
@@ -69,13 +69,13 @@ public class ScriptPattern {
             // Second to last chunk must be an OP_N opcode and there should be that many data chunks (keys).
             ScriptChunk m = chunks.get(chunks.size() - 2);
             if (!m.isOpCode()) return false;
-            int numKeys = decodeFromOpN(m.opcode);
+            int numKeys = decodeFromOpN(m.getOpcode());
             if (numKeys < 1 || chunks.size() != 3 + numKeys) return false;
             for (int i = 1; i < chunks.size() - 2; i++) {
                 if (chunks.get(i).isOpCode()) return false;
             }
             // First chunk must be an OP_N opcode too.
-            if (decodeFromOpN(chunks.get(0).opcode) < 1) return false;
+            if (decodeFromOpN(chunks.get(0).getOpcode()) < 1) return false;
         } catch (IllegalStateException e) {
             return false;   // Not an OP_N opcode.
         }

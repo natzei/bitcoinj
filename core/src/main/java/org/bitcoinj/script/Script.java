@@ -268,9 +268,9 @@ public class Script {
      */
     public byte[] getPubKeyHash() throws ScriptException {
         if (isSentToAddress())
-            return chunks.get(2).data;
+            return chunks.get(2).getData();
         else if (isPayToScriptHash())
-            return chunks.get(1).data;
+            return chunks.get(1).getData();
         else
             throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Script not in the standard scriptPubKey form");
     }
@@ -288,9 +288,9 @@ public class Script {
             throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Script not of right size, expecting 2 but got " + chunks.size());
         }
         final ScriptChunk chunk0 = chunks.get(0);
-        final byte[] chunk0data = chunk0.data;
+        final byte[] chunk0data = chunk0.getData();
         final ScriptChunk chunk1 = chunks.get(1);
-        final byte[] chunk1data = chunk1.data;
+        final byte[] chunk1data = chunk1.getData();
         if (chunk0data != null && chunk0data.length > 2 && chunk1data != null && chunk1data.length > 2) {
             // If we have two large constants assume the input to a pay-to-address output.
             return chunk1data;
@@ -311,7 +311,7 @@ public class Script {
         if (!isSentToCLTVPaymentChannel()) {
             throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Script not a standard CHECKLOCKTIMVERIFY transaction: " + this);
         }
-        return chunks.get(8).data;
+        return chunks.get(8).getData();
     }
 
     /**
@@ -323,14 +323,14 @@ public class Script {
         if (!isSentToCLTVPaymentChannel()) {
             throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Script not a standard CHECKLOCKTIMVERIFY transaction: " + this);
         }
-        return chunks.get(1).data;
+        return chunks.get(1).getData();
     }
 
     public BigInteger getCLTVPaymentChannelExpiry() {
         if (!isSentToCLTVPaymentChannel()) {
             throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Script not a standard CHECKLOCKTIMEVERIFY transaction: " + this);
         }
-        return castToBigInteger(chunks.get(4).data, 5, false);
+        return castToBigInteger(chunks.get(4).getData(), 5, false);
     }
 
     /**
@@ -484,17 +484,17 @@ public class Script {
         // and any placeholder OP_0 sigs.
         List<ScriptChunk> existingChunks = chunks.subList(1, chunks.size() - 1);
         ScriptChunk redeemScriptChunk = chunks.get(chunks.size() - 1);
-        checkNotNull(redeemScriptChunk.data);
-        Script redeemScript = new Script(redeemScriptChunk.data);
+        checkNotNull(redeemScriptChunk.getData());
+        Script redeemScript = new Script(redeemScriptChunk.getData());
 
         int sigCount = 0;
         int myIndex = redeemScript.findKeyInRedeem(signingKey);
         for (ScriptChunk chunk : existingChunks) {
-            if (chunk.opcode == OP_0) {
+            if (chunk.getOpcode() == OP_0) {
                 // OP_0, skip
             } else {
-                checkNotNull(chunk.data);
-                if (myIndex < redeemScript.findSigInRedeem(chunk.data, hash))
+                checkNotNull(chunk.getData());
+                if (myIndex < redeemScript.findSigInRedeem(chunk.getData(), hash))
                     return sigCount;
                 sigCount++;
             }
@@ -504,9 +504,9 @@ public class Script {
 
     private int findKeyInRedeem(ECKey key) {
         checkArgument(chunks.get(0).isOpCode()); // P2SH scriptSig
-        int numKeys = Script.decodeFromOpN(chunks.get(chunks.size() - 2).opcode);
+        int numKeys = Script.decodeFromOpN(chunks.get(chunks.size() - 2).getOpcode());
         for (int i = 0 ; i < numKeys ; i++) {
-            if (Arrays.equals(chunks.get(1 + i).data, key.getPubKey())) {
+            if (Arrays.equals(chunks.get(1 + i).getData(), key.getPubKey())) {
                 return i;
             }
         }
@@ -524,18 +524,18 @@ public class Script {
             throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Only usable for multisig scripts.");
 
         ArrayList<ECKey> result = Lists.newArrayList();
-        int numKeys = Script.decodeFromOpN(chunks.get(chunks.size() - 2).opcode);
+        int numKeys = Script.decodeFromOpN(chunks.get(chunks.size() - 2).getOpcode());
         for (int i = 0 ; i < numKeys ; i++)
-            result.add(ECKey.fromPublicOnly(chunks.get(1 + i).data));
+            result.add(ECKey.fromPublicOnly(chunks.get(1 + i).getData()));
         return result;
     }
 
     private int findSigInRedeem(byte[] signatureBytes, Sha256Hash hash) {
         checkArgument(chunks.get(0).isOpCode()); // P2SH scriptSig
-        int numKeys = Script.decodeFromOpN(chunks.get(chunks.size() - 2).opcode);
+        int numKeys = Script.decodeFromOpN(chunks.get(chunks.size() - 2).getOpcode());
         TransactionSignature signature = TransactionSignature.decodeFromBitcoin(signatureBytes, true);
         for (int i = 0 ; i < numKeys ; i++) {
-            if (ECKey.fromPublicOnly(chunks.get(i + 1).data).verify(hash, signature)) {
+            if (ECKey.fromPublicOnly(chunks.get(i + 1).getData()).verify(hash, signature)) {
                 return i;
             }
         }
@@ -552,7 +552,7 @@ public class Script {
         int lastOpCode = OP_INVALIDOPCODE;
         for (ScriptChunk chunk : chunks) {
             if (chunk.isOpCode()) {
-                switch (chunk.opcode) {
+                switch (chunk.getOpcode()) {
                 case OP_CHECKSIG:
                 case OP_CHECKSIGVERIFY:
                     sigOps++;
@@ -567,7 +567,7 @@ public class Script {
                 default:
                     break;
                 }
-                lastOpCode = chunk.opcode;
+                lastOpCode = chunk.getOpcode();
             }
         }
         return sigOps;
@@ -619,7 +619,7 @@ public class Script {
         for (int i = script.chunks.size() - 1; i >= 0; i--)
             if (!script.chunks.get(i).isOpCode()) {
                 Script subScript =  new Script();
-                subScript.parse(script.chunks.get(i).data);
+                subScript.parse(script.chunks.get(i).getData());
                 return getSigOpCount(subScript.chunks, true);
             }
         return 0;
@@ -632,7 +632,7 @@ public class Script {
         if (isSentToMultiSig()) {
             // for N of M CHECKMULTISIG script we will need N signatures to spend
             ScriptChunk nChunk = chunks.get(0);
-            return Script.decodeFromOpN(nChunk.opcode);
+            return Script.decodeFromOpN(nChunk.getOpcode());
         } else if (isSentToAddress() || isSentToRawPubKey()) {
             // pay-to-address and pay-to-pubkey require single sig
             return 1;
@@ -849,10 +849,10 @@ public class Script {
         
         for (ScriptChunk chunk : script.chunks) {
             boolean shouldExecute = !ifStack.contains(false);
-            int opcode = chunk.opcode;
+            int opcode = chunk.getOpcode();
 
             // Check stack element size
-            if (chunk.data != null && chunk.data.length > MAX_SCRIPT_ELEMENT_SIZE)
+            if (chunk.getData() != null && chunk.getData().length > MAX_SCRIPT_ELEMENT_SIZE)
                 throw new ScriptException(ScriptError.SCRIPT_ERR_PUSH_SIZE, "Attempted to push a data string larger than 520 bytes");
 
             // Note how OP_RESERVED does not count towards the opcode limit.
@@ -877,7 +877,7 @@ public class Script {
                 if (opcode == OP_0)
                     stack.add(new byte[]{});
                 else
-                    stack.add(chunk.data);
+                    stack.add(chunk.getData());
             } else if (shouldExecute || (OP_IF <= opcode && opcode <= OP_ENDIF)){
 
                 switch (opcode) {
@@ -1658,7 +1658,7 @@ public class Script {
         // TODO: Check if we can take out enforceP2SH if there's a checkpoint at the enforcement block.
         if (verifyFlags.contains(VerifyFlag.P2SH) && scriptPubKey.isPayToScriptHash()) {
             for (ScriptChunk chunk : chunks)
-                if (chunk.isOpCode() && chunk.opcode > OP_16)
+                if (chunk.isOpCode() && chunk.getOpcode() > OP_16)
                     throw new ScriptException(ScriptError.SCRIPT_ERR_SIG_PUSHONLY, "Attempted to spend a P2SH scriptPubKey with a script that contained script ops");
             
             byte[] scriptPubKeyBytes = p2shStack.pollLast();

@@ -32,14 +32,9 @@ import static org.bitcoinj.script.ScriptOpCodes.*;
  * A script element that is either a data push (signature, pubkey, etc) or a non-push (logic, numeric, etc) operation.
  */
 public class ScriptChunk {
-    /** Operation to be executed. Opcodes are defined in {@link ScriptOpCodes}. */
-    public final int opcode;
-    /**
-     * For push operations, this is the vector to be pushed on the stack. For {@link ScriptOpCodes#OP_0}, the vector is
-     * empty. Null for non-push operations.
-     */
+    private final int opcode;
     @Nullable
-    public final byte[] data;
+    private final byte[] data;
     private int startLocationInProgram;
 
     public ScriptChunk(int opcode, byte[] data) {
@@ -48,8 +43,26 @@ public class ScriptChunk {
 
     public ScriptChunk(int opcode, byte[] data, int startLocationInProgram) {
         this.opcode = opcode;
-        this.data = data;
+        this.data = Arrays.copyOf(data, data.length);
         this.startLocationInProgram = startLocationInProgram;
+    }
+
+    /**
+     * Operation to be executed. Opcodes are defined in {@link ScriptOpCodes}.
+     * @return the opcode for this operation.
+     */
+    public int getOpcode() {
+        return opcode;
+    }
+
+    /**
+     * For push operations, this is the vector to be pushed on the stack. For {@link ScriptOpCodes#OP_0}, the vector is
+     * empty. Null for non-push operations.
+     * <p>The data is represented in little-endian.<p/>
+     * @return the data for push operations, null otherwise.
+     */
+    public byte[] getData() {
+        return data;
     }
 
     public boolean equalsOpCode(int opcode) {
