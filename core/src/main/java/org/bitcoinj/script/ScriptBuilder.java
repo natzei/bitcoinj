@@ -29,7 +29,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Stack;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
@@ -149,37 +148,7 @@ public class ScriptBuilder {
      * @see #number(long)
      */
     protected ScriptBuilder bigNum(int index, long num) {
-        final byte[] data;
-
-        if (num == 0) {
-            data = new byte[0];
-        } else {
-            Stack<Byte> result = new Stack<>();
-            final boolean neg = num < 0;
-            long absvalue = Math.abs(num);
-
-            while (absvalue != 0) {
-                result.push((byte) (absvalue & 0xff));
-                absvalue >>= 8;
-            }
-
-            if ((result.peek() & 0x80) != 0) {
-                // The most significant byte is >= 0x80, so push an extra byte that
-                // contains just the sign of the value.
-                result.push((byte) (neg ? 0x80 : 0));
-            } else if (neg) {
-                // The most significant byte is < 0x80 and the value is negative,
-                // set the sign bit so it is subtracted and interpreted as a
-                // negative when converting back to an integral.
-                result.push((byte) (result.pop() | 0x80));
-            }
-
-            data = new byte[result.size()];
-            for (int byteIdx = 0; byteIdx < data.length; byteIdx++) {
-                data[byteIdx] = result.get(byteIdx);
-            }
-        }
-
+        final byte[] data = Utils.reverseBytes(Utils.encodeMPI(BigInteger.valueOf(num), false));
         // At most the encoded value could take up to 8 bytes, so we don't need
         // to use OP_PUSHDATA opcodes
         return addChunk(index, new ScriptChunk(data.length, data));

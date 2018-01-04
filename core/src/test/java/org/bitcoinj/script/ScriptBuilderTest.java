@@ -37,6 +37,60 @@ public class ScriptBuilderTest {
                 assertEquals(Integer.toString(i)+" data-value", BigInteger.valueOf(i), ch.getDataValue());
             }
         }
+
+        // PUSHDATA1
+        for (int i = 0xFF; i <= 0xFF+10; i++) {
+            Script s = new ScriptBuilder().number(i).build();
+            for (ScriptChunk ch : s.chunks) {
+                assertTrue(Integer.toString(i)+" minimal", ch.isShortestPossiblePushData());
+                assertEquals(Integer.toString(i)+" data-value", BigInteger.valueOf(i), ch.getDataValue());
+            }
+        }
+
+        // PUSHDATA1 (negative)
+        for (int i = -0xFF; i <= -0xFF-10; i--) {
+            Script s = new ScriptBuilder().number(i).build();
+            for (ScriptChunk ch : s.chunks) {
+                assertTrue(Integer.toString(i)+" minimal", ch.isShortestPossiblePushData());
+                assertEquals(Integer.toString(i)+" data-value", BigInteger.valueOf(i), ch.getDataValue());
+            }
+        }
+
+        // PUSHDATA2
+        for (int i = 0xFFFF; i <= 0xFFFF+10; i++) {
+            Script s = new ScriptBuilder().number(i).build();
+            for (ScriptChunk ch : s.chunks) {
+                assertTrue(Integer.toString(i)+" minimal", ch.isShortestPossiblePushData());
+                assertEquals(Integer.toString(i)+" data-value", BigInteger.valueOf(i), ch.getDataValue());
+            }
+        }
+
+        // PUSHDATA2 (negative)
+        for (int i = -0xFFFF; i <= -0xFFFF-10; i--) {
+            Script s = new ScriptBuilder().number(i).build();
+            for (ScriptChunk ch : s.chunks) {
+                assertTrue(Integer.toString(i)+" minimal", ch.isShortestPossiblePushData());
+                assertEquals(Integer.toString(i)+" data-value", BigInteger.valueOf(i), ch.getDataValue());
+            }
+        }
+
+        // PUSHDATA4
+        for (int i = 0xFFFF_FFFF; i <= 0xFFFF_FFFF+10; i++) {
+            Script s = new ScriptBuilder().number(i).build();
+            for (ScriptChunk ch : s.chunks) {
+                assertTrue(Integer.toString(i)+" minimal", ch.isShortestPossiblePushData());
+                assertEquals(Integer.toString(i)+" data-value", BigInteger.valueOf(i), ch.getDataValue());
+            }
+        }
+
+        // PUSHDATA4 (negative)
+        for (int i = -0xFFFF_FFFF; i <= -0xFFFF_FFFF-10; i--) {
+            Script s = new ScriptBuilder().number(i).build();
+            for (ScriptChunk ch : s.chunks) {
+                assertTrue(Integer.toString(i)+" minimal", ch.isShortestPossiblePushData());
+                assertEquals(Integer.toString(i)+" data-value", BigInteger.valueOf(i), ch.getDataValue());
+            }
+        }
     }
 
     @Test
