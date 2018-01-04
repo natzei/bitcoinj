@@ -99,44 +99,52 @@ public class ScriptBuilder {
     public ScriptBuilder number(int index, long num) {
         if (num == -1) {
             return op(index, OP_1NEGATE);
-        } else if (num >= -1 && num <= 16) {
-            return smallNum(index, (int) num);
+        } else if (num >= 0 && num <= 16) {
+            return addChunk(index, new ScriptChunk(ScriptOpCodes.encodeOpN((int) num), null));
         } else {
-            return bigNum(index, num);
+            final byte[] data = Utils.reverseBytes(Utils.encodeMPI(BigInteger.valueOf(num), false));
+            // At most the encoded value could take up to 8 bytes, so we don't need
+            // to use OP_PUSHDATA opcodes
+            return addChunk(index, new ScriptChunk(data.length, data));
         }
     }
 
     /**
      * Adds the given number as a OP_N opcode to the end of the program.
      * Only handles values 0-16 inclusive.
-     * 
-     * @see #number(long)
+     * @param num the number to add
+     * @return this script builder
+     * @deprecated {@link ScriptBuilder#number(long)}
      */
+    @Deprecated
     public ScriptBuilder smallNum(int num) {
-        return smallNum(chunks.size(), num);
+        return number(num);
     }
 
     /** Adds the given number as a push data chunk.
      * This is intended to use for negative numbers or values > 16, and although
      * it will accept numbers in the range 0-16 inclusive, the encoding would be
      * considered non-standard.
-     * 
-     * @see #number(long)
+     * @param num the number to add
+     * @return this script builder
+     * @deprecated {@link ScriptBuilder#number(long)}
      */
+    @Deprecated
     protected ScriptBuilder bigNum(long num) {
-        return bigNum(chunks.size(), num);
+        return number(num);
     }
 
     /**
      * Adds the given number as a OP_N opcode to the given index in the program.
      * Only handles values 0-16 inclusive.
-     * 
-     * @see #number(long)
+     * @param index at which insert the number
+     * @param num the number to add
+     * @return this script builder
+     * @deprecated {@link ScriptBuilder#number(int,long)}
      */
+    @Deprecated
     public ScriptBuilder smallNum(int index, int num) {
-        checkArgument(num >= 0, "Cannot encode negative numbers with smallNum");
-        checkArgument(num <= 16, "Cannot encode numbers larger than 16 with smallNum");
-        return addChunk(index, new ScriptChunk(ScriptOpCodes.encodeOpN(num), null));
+        return number(index, num);
     }
 
     /**
@@ -144,14 +152,14 @@ public class ScriptBuilder {
      * This is intended to use for negative numbers or values > 16, and although
      * it will accept numbers in the range 0-16 inclusive, the encoding would be
      * considered non-standard.
-     * 
-     * @see #number(long)
+     * @param index at which insert the number
+     * @param num the number to add
+     * @return this script builder
+     * @deprecated {@link ScriptBuilder#number(int,long)}
      */
+    @Deprecated
     protected ScriptBuilder bigNum(int index, long num) {
-        final byte[] data = Utils.reverseBytes(Utils.encodeMPI(BigInteger.valueOf(num), false));
-        // At most the encoded value could take up to 8 bytes, so we don't need
-        // to use OP_PUSHDATA opcodes
-        return addChunk(index, new ScriptChunk(data.length, data));
+        return number(index, num);
     }
 
     /**
