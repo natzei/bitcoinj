@@ -22,9 +22,12 @@ import com.google.common.base.Objects;
 import com.google.common.primitives.Bytes;
 
 import javax.annotation.Nullable;
+
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static org.bitcoinj.script.ScriptOpCodes.*;
 
@@ -37,8 +40,13 @@ public class ScriptChunk {
     private final byte[] data;
     private int startLocationInProgram;
 
+    private static final byte[] OP_0_BYTE_ARRAY = new byte[]{};
+    private static final byte[] OP_1NEGATE_BYTE_ARRAY = Utils.reverseBytes(Utils.encodeMPI(BigInteger.ONE.negate(), false));
+
     public ScriptChunk(int opcode, byte[] data) {
         this(opcode, data, -1);
+        if (isPushData() && (opcode == OP_0 || opcode == OP_1NEGATE || (opcode >= OP_1 && opcode <= OP_16)))
+            checkArgument(data == null, "Data must be null for opcode "+opcode);
     }
 
     public ScriptChunk(int opcode, byte[] data, int startLocationInProgram) {
@@ -60,9 +68,34 @@ public class ScriptChunk {
      * empty. Null for non-push operations.
      * <p>The data is represented in little-endian.<p/>
      * @return the data for push operations, null otherwise.
+     * @see ScriptChunk#isPushData()
      */
     public byte[] getData() {
+        if (opcode == OP_0)
+            return OP_0_BYTE_ARRAY;
+        if (opcode == OP_1NEGATE)
+            return OP_1NEGATE_BYTE_ARRAY;
+        if (opcode >= OP_1 && opcode <= OP_16)
+            return new byte[]{(byte)(opcode + 1 - OP_1)};
         return data;
+    }
+
+    /**
+     * Decode the data vector for push operations.
+     * <p>Same of <code>Utils.decodeMPI(Utils.reverseBytes(getData()), false);</code></p>
+     * @return the value obtained decoding getData().
+     * @see Utils#decodeMPI(byte[], boolean)
+     * @see Utils#reverseBytes(byte[])
+     */
+    public BigInteger getDataValue() {
+        checkState(isPushData());
+        if (opcode == OP_0)
+            return BigInteger.ZERO;
+        if (opcode == OP_1NEGATE)
+            return BigInteger.ONE.negate();
+        if (opcode >= OP_1 && opcode <= OP_16)
+            return BigInteger.valueOf(opcode + 1 - OP_1);
+        return Utils.decodeMPI(Utils.reverseBytes(data), false);
     }
 
     public boolean equalsOpCode(int opcode) {
