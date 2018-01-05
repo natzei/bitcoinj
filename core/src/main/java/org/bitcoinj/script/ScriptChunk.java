@@ -248,4 +248,24 @@ public class ScriptChunk {
         checkState(ch.isShortestPossiblePushData());
         return ch;
     }
+
+    /**
+     * Return a script chunk operation that pushes the given number on the stack.
+     * <p>{@link ScriptChunk#isPushData()} and
+     * {@link ScriptChunk#isShortestPossiblePushData()} always return {@code true}.</p>
+     * @param num the number to push
+     * @return a script chunk operation that pushes the given data on the stack.
+     */
+    public static ScriptChunk getPushDataOperation(long num) {
+        if (num == -1) {
+            return new ScriptChunk(OP_1NEGATE, null);
+        } else if (num >= 0 && num <= 16) {
+            return new ScriptChunk(ScriptOpCodes.encodeOpN((int) num), null);
+        } else {
+            final byte[] data = Utils.reverseBytes(Utils.encodeMPI(BigInteger.valueOf(num), false));
+            // At most the encoded value could take up to 8 bytes, so we don't need
+            // to use OP_PUSHDATA opcodes
+            return new ScriptChunk(data.length, data);
+        }
+    }
 }

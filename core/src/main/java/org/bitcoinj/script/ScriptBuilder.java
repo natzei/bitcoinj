@@ -97,16 +97,7 @@ public class ScriptBuilder {
      * uses shortest encoding possible.
      */
     public ScriptBuilder number(int index, long num) {
-        if (num == -1) {
-            return op(index, OP_1NEGATE);
-        } else if (num >= 0 && num <= 16) {
-            return addChunk(index, new ScriptChunk(ScriptOpCodes.encodeOpN((int) num), null));
-        } else {
-            final byte[] data = Utils.reverseBytes(Utils.encodeMPI(BigInteger.valueOf(num), false));
-            // At most the encoded value could take up to 8 bytes, so we don't need
-            // to use OP_PUSHDATA opcodes
-            return addChunk(index, new ScriptChunk(data.length, data));
-        }
+        return addChunk(index, ScriptChunk.getPushDataOperation(num));
     }
 
     /**
