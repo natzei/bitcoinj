@@ -70,7 +70,7 @@ public class ScriptBuilder {
 
     /** Adds the given opcode to the given index in the program */
     public ScriptBuilder op(int index, int opcode) {
-        checkArgument(opcode > OP_PUSHDATA4);
+        checkArgument(opcode == OP_0 || opcode > OP_PUSHDATA4);
         return addChunk(index, new ScriptChunk(opcode, null));
     }
 
