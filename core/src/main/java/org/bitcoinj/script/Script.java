@@ -30,7 +30,6 @@ import javax.annotation.Nullable;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -370,28 +369,6 @@ public class Script {
 
     ////////////////////// Interface for writing scripts from scratch ////////////////////////////////
 
-    /**
-     * Writes out the given byte buffer to the output stream with the correct opcode prefix
-     * To write an integer call writeBytes(out, Utils.reverseBytes(Utils.encodeMPI(val, false)));
-     */
-    public static void writeBytes(OutputStream os, byte[] buf) throws IOException {
-        if (buf.length < OP_PUSHDATA1) {
-            os.write(buf.length);
-            os.write(buf);
-        } else if (buf.length < 256) {
-            os.write(OP_PUSHDATA1);
-            os.write(buf.length);
-            os.write(buf);
-        } else if (buf.length < 65536) {
-            os.write(OP_PUSHDATA2);
-            os.write(0xFF & (buf.length));
-            os.write(0xFF & (buf.length >> 8));
-            os.write(buf);
-        } else {
-            throw new RuntimeException("Unimplemented");
-        }
-    }
-
     /** Creates a program that requires at least N of the given keys to sign, using OP_CHECKMULTISIG. */
     public static byte[] createMultiSigOutputScript(int threshold, List<ECKey> pubkeys) {
         checkArgument(threshold > 0);
@@ -404,7 +381,7 @@ public class Script {
             ByteArrayOutputStream bits = new ByteArrayOutputStream();
             bits.write(ScriptOpCodes.encodeOpN(threshold));
             for (ECKey key : pubkeys) {
-                writeBytes(bits, key.getPubKey());
+                bits.write(ScriptChunk.getPushDataOperation(key.getPubKey()).toByteArray());
             }
             bits.write(ScriptOpCodes.encodeOpN(pubkeys.size()));
             bits.write(OP_CHECKMULTISIG);
@@ -418,8 +395,8 @@ public class Script {
         try {
             // TODO: Do this by creating a Script *first* then having the script reassemble itself into bytes.
             ByteArrayOutputStream bits = new UnsafeByteArrayOutputStream(signature.length + pubkey.length + 2);
-            writeBytes(bits, signature);
-            writeBytes(bits, pubkey);
+            bits.write(ScriptChunk.getPushDataOperation(signature).toByteArray());
+            bits.write(ScriptChunk.getPushDataOperation(pubkey).toByteArray());
             return bits.toByteArray();
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -430,7 +407,7 @@ public class Script {
         try {
             // TODO: Do this by creating a Script *first* then having the script reassemble itself into bytes.
             ByteArrayOutputStream bits = new UnsafeByteArrayOutputStream(signature.length + 2);
-            writeBytes(bits, signature);
+            bits.write(ScriptChunk.getPushDataOperation(signature).toByteArray());
             return bits.toByteArray();
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -1427,7 +1404,7 @@ public class Script {
 
         UnsafeByteArrayOutputStream outStream = new UnsafeByteArrayOutputStream(sigBytes.length + 1);
         try {
-            writeBytes(outStream, sigBytes);
+            outStream.write(ScriptChunk.getPushDataOperation(sigBytes).toByteArray());
         } catch (IOException e) {
             throw new RuntimeException(e); // Cannot happen
         }
@@ -1503,7 +1480,7 @@ public class Script {
         for (byte[] sig : sigs) {
             UnsafeByteArrayOutputStream outStream = new UnsafeByteArrayOutputStream(sig.length + 1);
             try {
-                writeBytes(outStream, sig);
+                outStream.write(ScriptChunk.getPushDataOperation(sig).toByteArray());
             } catch (IOException e) {
                 throw new RuntimeException(e); // Cannot happen
             }

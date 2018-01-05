@@ -248,14 +248,14 @@ public class ScriptTest {
                 if (val >= -1 && val <= 16)
                     out.write(ScriptOpCodes.encodeOpN((int) val));
                 else
-                    Script.writeBytes(out, Utils.reverseBytes(Utils.encodeMPI(BigInteger.valueOf(val), false)));
+                    out.write(ScriptChunk.getPushDataOperation(Utils.reverseBytes(Utils.encodeMPI(BigInteger.valueOf(val), false))).toByteArray());
             } else if (w.matches("^0x[0-9a-fA-F]*$")) {
                 // Raw hex data, inserted NOT pushed onto stack:
                 out.write(HEX.decode(w.substring(2).toLowerCase()));
             } else if (w.length() >= 2 && w.startsWith("'") && w.endsWith("'")) {
                 // Single-quoted string, pushed as data. NOTE: this is poor-man's
                 // parsing, spaces/tabs/newlines in single-quoted strings won't work.
-                Script.writeBytes(out, w.substring(1, w.length() - 1).getBytes(Charset.forName("UTF-8")));
+                out.write(ScriptChunk.getPushDataOperation(w.substring(1, w.length() - 1).getBytes(Charset.forName("UTF-8"))).toByteArray());
             } else if (ScriptOpCodes.getOpCode(w) != OP_INVALIDOPCODE) {
                 // opcode, e.g. OP_ADD or OP_1:
                 out.write(ScriptOpCodes.getOpCode(w));
