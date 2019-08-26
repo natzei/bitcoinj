@@ -5,7 +5,7 @@ plugins {
     id 'eclipse'
 }
 
-version = '0.16.1-LIB'
+version = '0.16.2-LIB'
 archivesBaseName = 'bitcoinj-core'
 
 dependencies {
