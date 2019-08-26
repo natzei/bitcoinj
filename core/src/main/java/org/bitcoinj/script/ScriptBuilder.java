@@ -18,8 +18,6 @@
 
 package org.bitcoinj.script;
 
-import com.google.common.collect.Lists;
-
 import org.bitcoinj.core.Address;
 import org.bitcoinj.core.LegacyAddress;
 import org.bitcoinj.core.ECKey;
@@ -37,6 +35,7 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Stack;
 
@@ -56,7 +55,7 @@ public class ScriptBuilder implements Serializable {
 
     /** Creates a fresh ScriptBuilder with an empty program. */
     public ScriptBuilder() {
-        chunks = Lists.newLinkedList();
+        chunks = new LinkedList<>();
     }
 
     /** Creates a fresh ScriptBuilder with the given program as the starting point. */
@@ -544,54 +543,5 @@ public class ScriptBuilder implements Serializable {
     public static Script createOpReturnScript(byte[] data) {
         checkArgument(data.length <= 80);
         return new ScriptBuilder().op(OP_RETURN).data(data).build();
-    }
-
-    public static Script createCLTVPaymentChannelOutput(BigInteger time, ECKey from, ECKey to) {
-        byte[] timeBytes = Utils.reverseBytes(Utils.encodeMPI(time, false));
-        if (timeBytes.length > 5) {
-            throw new RuntimeException("Time too large to encode as 5-byte int");
-        }
-        return new ScriptBuilder().op(OP_IF)
-                .data(to.getPubKey()).op(OP_CHECKSIGVERIFY)
-                .op(OP_ELSE)
-                .data(timeBytes).op(OP_CHECKLOCKTIMEVERIFY).op(OP_DROP)
-                .op(OP_ENDIF)
-                .data(from.getPubKey()).op(OP_CHECKSIG).build();
-    }
-
-    public static Script createCLTVPaymentChannelRefund(TransactionSignature signature) {
-        ScriptBuilder builder = new ScriptBuilder();
-        builder.data(signature.encodeToBitcoin());
-        builder.data(new byte[] { 0 }); // Use the CHECKLOCKTIMEVERIFY if branch
-        return builder.build();
-    }
-
-    public static Script createCLTVPaymentChannelP2SHRefund(TransactionSignature signature, Script redeemScript) {
-        ScriptBuilder builder = new ScriptBuilder();
-        builder.data(signature.encodeToBitcoin());
-        builder.data(new byte[] { 0 }); // Use the CHECKLOCKTIMEVERIFY if branch
-        builder.data(redeemScript.getProgram());
-        return builder.build();
-    }
-
-    public static Script createCLTVPaymentChannelP2SHInput(byte[] from, byte[] to, Script redeemScript) {
-        ScriptBuilder builder = new ScriptBuilder();
-        builder.data(from);
-        builder.data(to);
-        builder.smallNum(1); // Use the CHECKLOCKTIMEVERIFY if branch
-        builder.data(redeemScript.getProgram());
-        return builder.build();
-    }
-
-    public static Script createCLTVPaymentChannelInput(TransactionSignature from, TransactionSignature to) {
-        return createCLTVPaymentChannelInput(from.encodeToBitcoin(), to.encodeToBitcoin());
-    }
-
-    public static Script createCLTVPaymentChannelInput(byte[] from, byte[] to) {
-        ScriptBuilder builder = new ScriptBuilder();
-        builder.data(from);
-        builder.data(to);
-        builder.smallNum(1); // Use the CHECKLOCKTIMEVERIFY if branch
-        return builder.build();
     }
 }

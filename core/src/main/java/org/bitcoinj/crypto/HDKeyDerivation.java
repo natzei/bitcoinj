@@ -16,7 +16,6 @@
 
 package org.bitcoinj.crypto;
 
-import com.google.common.collect.*;
 import org.bitcoinj.core.*;
 import org.bouncycastle.math.ec.*;
 
@@ -84,14 +83,14 @@ public final class HDKeyDerivation {
     public static DeterministicKey createMasterPrivKeyFromBytes(byte[] privKeyBytes, byte[] chainCode)
             throws HDDerivationException {
         // childNumberPath is an empty list because we are creating the root key.
-        return createMasterPrivKeyFromBytes(privKeyBytes, chainCode, ImmutableList.<ChildNumber> of());
+        return createMasterPrivKeyFromBytes(privKeyBytes, chainCode, HDPath.M());
     }
 
     /**
      * @throws HDDerivationException if privKeyBytes is invalid (not between 0 and n inclusive).
      */
     public static DeterministicKey createMasterPrivKeyFromBytes(byte[] privKeyBytes, byte[] chainCode,
-            ImmutableList<ChildNumber> childNumberPath) throws HDDerivationException {
+            List<ChildNumber> childNumberPath) throws HDDerivationException {
         BigInteger priv = new BigInteger(1, privKeyBytes);
         assertNonZero(priv, "Generated master key is invalid.");
         assertLessThanN(priv, "Generated master key is invalid.");
@@ -99,7 +98,7 @@ public final class HDKeyDerivation {
     }
 
     public static DeterministicKey createMasterPubKeyFromBytes(byte[] pubKeyBytes, byte[] chainCode) {
-        return new DeterministicKey(ImmutableList.<ChildNumber>of(), chainCode, new LazyECPoint(ECKey.CURVE.getCurve(), pubKeyBytes), null, null);
+        return new DeterministicKey(HDPath.M(), chainCode, new LazyECPoint(ECKey.CURVE.getCurve(), pubKeyBytes), null, null);
     }
 
     /**
@@ -147,7 +146,7 @@ public final class HDKeyDerivation {
     public static DeterministicKey deriveChildKeyFromPrivate(DeterministicKey parent, ChildNumber childNumber)
             throws HDDerivationException {
         RawKeyBytes rawKey = deriveChildKeyBytesFromPrivate(parent, childNumber);
-        return new DeterministicKey(HDUtils.append(parent.getPath(), childNumber), rawKey.chainCode,
+        return new DeterministicKey(parent.getPath().extend(childNumber), rawKey.chainCode,
                 new BigInteger(1, rawKey.keyBytes), parent);
     }
 
@@ -183,7 +182,7 @@ public final class HDKeyDerivation {
     public static DeterministicKey deriveChildKeyFromPublic(DeterministicKey parent, ChildNumber childNumber,
             PublicDeriveMode mode) throws HDDerivationException {
         RawKeyBytes rawKey = deriveChildKeyBytesFromPublic(parent, childNumber, PublicDeriveMode.NORMAL);
-        return new DeterministicKey(HDUtils.append(parent.getPath(), childNumber), rawKey.chainCode,
+        return new DeterministicKey(parent.getPath().extend(childNumber), rawKey.chainCode,
                 new LazyECPoint(ECKey.CURVE.getCurve(), rawKey.keyBytes), null, parent);
     }
 

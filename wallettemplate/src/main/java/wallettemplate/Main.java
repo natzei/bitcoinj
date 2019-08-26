@@ -18,6 +18,7 @@ package wallettemplate;
 
 import com.google.common.util.concurrent.*;
 import javafx.scene.input.*;
+import org.bitcoinj.utils.AppDataDirectory;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.Utils;
 import org.bitcoinj.kits.WalletAppKit;
@@ -35,7 +36,6 @@ import javafx.scene.layout.Pane;
 import javafx.scene.layout.StackPane;
 import javafx.stage.Stage;
 import wallettemplate.controls.NotificationBarPane;
-import wallettemplate.utils.AppDataDirectory;
 import wallettemplate.utils.GuiUtils;
 import wallettemplate.utils.TextFieldValidator;
 
@@ -139,9 +139,6 @@ public class Main extends Application {
         bitcoin = new WalletAppKit(params, PREFERRED_OUTPUT_SCRIPT_TYPE, null, appDataDirectory, WALLET_FILE_NAME) {
             @Override
             protected void onSetupCompleted() {
-                // Don't make the user wait for confirmations for now, as the intention is they're sending it
-                // their own money!
-                bitcoin.wallet().allowSpendingUnconfirmedTransactions();
                 Platform.runLater(controller::onBitcoinSetup);
             }
         };

@@ -21,7 +21,6 @@ package org.bitcoinj.script;
 
 import org.bitcoinj.core.*;
 import org.bitcoinj.crypto.TransactionSignature;
-import com.google.common.collect.Lists;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.bouncycastle.crypto.digests.RIPEMD160Digest;
@@ -108,7 +107,7 @@ public class Script {
 
     /** Creates an empty script that serializes to nothing. */
     private Script() {
-        chunks = Lists.newArrayList();
+        chunks = new ArrayList<>();
     }
 
     // Used from ScriptBuilder.
@@ -176,10 +175,10 @@ public class Script {
     }
 
     private static final ScriptChunk[] STANDARD_TRANSACTION_SCRIPT_CHUNKS = {
-        new ScriptChunk(ScriptOpCodes.OP_DUP, null, 0),
-        new ScriptChunk(ScriptOpCodes.OP_HASH160, null, 1),
-        new ScriptChunk(ScriptOpCodes.OP_EQUALVERIFY, null, 23),
-        new ScriptChunk(ScriptOpCodes.OP_CHECKSIG, null, 24),
+        new ScriptChunk(ScriptOpCodes.OP_DUP, null),
+        new ScriptChunk(ScriptOpCodes.OP_HASH160, null),
+        new ScriptChunk(ScriptOpCodes.OP_EQUALVERIFY, null),
+        new ScriptChunk(ScriptOpCodes.OP_CHECKSIG, null),
     };
 
     /**
@@ -194,9 +193,7 @@ public class Script {
     private void parse(byte[] program) throws ScriptException {
         chunks = new ArrayList<>(5);   // Common size.
         ByteArrayInputStream bis = new ByteArrayInputStream(program);
-        int initialSize = bis.available();
         while (bis.available() > 0) {
-            int startLocationInProgram = initialSize - bis.available();
             int opcode = bis.read();
 
             long dataToRead = -1;
@@ -219,13 +216,13 @@ public class Script {
 
             ScriptChunk chunk;
             if (dataToRead == -1) {
-                chunk = new ScriptChunk(opcode, null, startLocationInProgram);
+                chunk = new ScriptChunk(opcode, null);
             } else {
                 if (dataToRead > bis.available())
                     throw new ScriptException(ScriptError.SCRIPT_ERR_BAD_OPCODE, "Push of data element that is larger than remaining data");
                 byte[] data = new byte[(int)dataToRead];
                 checkState(dataToRead == 0 || bis.read(data, 0, (int)dataToRead) == dataToRead);
-                chunk = new ScriptChunk(opcode, data, startLocationInProgram);
+                chunk = new ScriptChunk(opcode, data);
             }
             // Save some memory by eliminating redundant copies of the same chunk objects.
             for (ScriptChunk c : STANDARD_TRANSACTION_SCRIPT_CHUNKS) {
@@ -261,27 +258,6 @@ public class Script {
             return ScriptPattern.extractHashFromP2WH(this);
         else
             throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Script not in the standard scriptPubKey form");
-    }
-
-    @Deprecated
-    public byte[] getCLTVPaymentChannelSenderPubKey() throws ScriptException {
-        if (!ScriptPattern.isSentToCltvPaymentChannel(this))
-            throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Script not a standard CHECKLOCKTIMVERIFY transaction: " + this);
-        return ScriptPattern.extractSenderPubKeyFromCltvPaymentChannel(this);
-    }
-
-    @Deprecated
-    public byte[] getCLTVPaymentChannelRecipientPubKey() throws ScriptException {
-        if (!ScriptPattern.isSentToCltvPaymentChannel(this))
-            throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Script not a standard CHECKLOCKTIMVERIFY transaction: " + this);
-        return ScriptPattern.extractRecipientPubKeyFromCltvPaymentChannel(this);
-    }
-
-    @Deprecated
-    public BigInteger getCLTVPaymentChannelExpiry() throws ScriptException {
-        if (!ScriptPattern.isSentToCltvPaymentChannel(this))
-            throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Script not a standard CHECKLOCKTIMEVERIFY transaction: " + this);
-        return ScriptPattern.extractExpiryFromCltvPaymentChannel(this);
     }
 
     /**
@@ -483,7 +459,7 @@ public class Script {
         if (!ScriptPattern.isSentToMultisig(this))
             throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Only usable for multisig scripts.");
 
-        ArrayList<ECKey> result = Lists.newArrayList();
+        ArrayList<ECKey> result = new ArrayList<>();
         int numKeys = Script.decodeFromOpN(chunks.get(chunks.size() - 2).opcode);
         for (int i = 0 ; i < numKeys ; i++)
             result.add(ECKey.fromPublicOnly(chunks.get(1 + i).data));
@@ -645,12 +621,6 @@ public class Script {
         return ScriptPattern.isSentToMultisig(this);
     }
 
-    /** @deprecated use {@link ScriptPattern#isSentToCltvPaymentChannel(Script)} */
-    @Deprecated
-    public boolean isSentToCLTVPaymentChannel() {
-        return ScriptPattern.isSentToCltvPaymentChannel(this);
-    }
-
     private static boolean equalsRange(byte[] a, int start, byte[] b) {
         if (start + b.length > a.length)
             return false;
@@ -800,10 +770,12 @@ public class Script {
         
         LinkedList<byte[]> altstack = new LinkedList<>();
         LinkedList<Boolean> ifStack = new LinkedList<>();
-        
+
+        int nextLocationInScript = 0;
         for (ScriptChunk chunk : script.chunks) {
             boolean shouldExecute = !ifStack.contains(false);
             int opcode = chunk.opcode;
+            nextLocationInScript += chunk.size();
 
             // Check stack element size
             if (chunk.data != null && chunk.data.length > MAX_SCRIPT_ELEMENT_SIZE)
@@ -1241,7 +1213,7 @@ public class Script {
                     stack.add(Sha256Hash.hashTwice(stack.pollLast()));
                     break;
                 case OP_CODESEPARATOR:
-                    lastCodeSepLocation = chunk.getStartLocationInProgram() + 1;
+                    lastCodeSepLocation = nextLocationInScript;
                     break;
                 case OP_CHECKSIG:
                 case OP_CHECKSIGVERIFY:
@@ -1650,8 +1622,8 @@ public class Script {
         // TODO: Check if we can take out enforceP2SH if there's a checkpoint at the enforcement block.
         if (verifyFlags.contains(VerifyFlag.P2SH) && ScriptPattern.isP2SH(scriptPubKey)) {
             for (ScriptChunk chunk : chunks)
-                if (chunk.isOpCode() && chunk.opcode > OP_16)
-                    throw new ScriptException(ScriptError.SCRIPT_ERR_SIG_PUSHONLY, "Attempted to spend a P2SH scriptPubKey with a script that contained script ops");
+                if (!chunk.isPushData())
+                    throw new ScriptException(ScriptError.SCRIPT_ERR_SIG_PUSHONLY, "Attempted to spend a P2SH scriptPubKey with a script that contained the script op " + chunk);
             
             byte[] scriptPubKeyBytes = p2shStack.pollLast();
             Script scriptPubKeyP2SH = new Script(scriptPubKeyBytes);

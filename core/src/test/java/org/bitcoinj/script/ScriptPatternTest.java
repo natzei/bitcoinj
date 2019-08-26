@@ -23,9 +23,10 @@ import com.google.common.collect.Lists;
 import org.bitcoinj.core.ECKey;
 import org.junit.Test;
 
-import java.math.BigInteger;
 import java.util.List;
 
+import static org.bitcoinj.script.ScriptOpCodes.OP_CHECKMULTISIG;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class ScriptPatternTest {
@@ -74,10 +75,16 @@ public class ScriptPatternTest {
     }
 
     @Test
-    public void testCreateCLTVPaymentChannelOutput() {
-        assertTrue(ScriptPattern.isSentToCltvPaymentChannel(
-                ScriptBuilder.createCLTVPaymentChannelOutput(BigInteger.ONE, keys.get(0), keys.get(1))
-        ));
+    public void testIsSentToMultisigFailure() {
+        // at the time this test was written, the following script would result in throwing
+        // put a non OP_N opcode first and second-to-last positions
+        Script evil = new ScriptBuilder()
+                .op(0xff)
+                .op(0xff)
+                .op(0xff)
+                .op(OP_CHECKMULTISIG)
+                .build();
+        assertFalse(ScriptPattern.isSentToMultisig(evil));
     }
 
     @Test

@@ -41,7 +41,6 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 import com.google.common.io.BaseEncoding;
 
@@ -532,7 +531,7 @@ public class Utils {
             return 0;
         // This would be much easier in a functional language (or in Java 8).
         items = Ordering.natural().reverse().sortedCopy(items);
-        LinkedList<Pair> pairs = Lists.newLinkedList();
+        LinkedList<Pair> pairs = new LinkedList<>();
         pairs.add(new Pair(items.get(0), 0));
         for (int item : items) {
             Pair pair = pairs.getLast();
@@ -564,8 +563,8 @@ public class Utils {
     private static Runtime runtime = null;
     private static OS os = null;
     static {
-        String runtimeProp = System.getProperty("java.runtime.name").toLowerCase(Locale.US);
-        if (runtimeProp == null)
+        String runtimeProp = System.getProperty("java.runtime.name", "").toLowerCase(Locale.US);
+        if (runtimeProp.equals(""))
             runtime = null;
         else if (runtimeProp.contains("android"))
             runtime = Runtime.ANDROID;
@@ -576,8 +575,8 @@ public class Utils {
         else
             log.info("Unknown java.runtime.name '{}'", runtimeProp);
 
-        String osProp = System.getProperty("os.name").toLowerCase(Locale.US);
-        if (osProp == null)
+        String osProp = System.getProperty("os.name", "").toLowerCase(Locale.US);
+        if (osProp.equals(""))
             os = null;
         else if (osProp.contains("linux"))
             os = OS.LINUX;

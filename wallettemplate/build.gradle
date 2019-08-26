@@ -10,7 +10,7 @@ dependencies {
     implementation 'com.google.guava:guava:27.1-android'
     implementation 'de.jensd:fontawesomefx:8.0.0'
     implementation 'com.google.zxing:core:3.3.3'
-    implementation 'org.slf4j:slf4j-jdk14:1.7.25'
+    implementation 'org.slf4j:slf4j-jdk14:1.7.27'
 }
 
 javafx {
@@ -20,5 +20,6 @@ javafx {
 sourceCompatibility = 1.11
 compileJava.options.encoding = 'UTF-8'
 compileTestJava.options.encoding = 'UTF-8'
+javadoc.options.encoding = 'UTF-8'
 
 mainClassName = 'wallettemplate.Main'
