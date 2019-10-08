@@ -607,8 +607,8 @@ public class PeerGroupTest extends TestWithPeerGroup {
     }
 
     @Test
-    public void testBloomOnP2Pubkey() throws Exception {
-        // Cover bug 513. When a relevant transaction with a p2pubkey output is found, the Bloom filter should be
+    public void testBloomOnP2PK() throws Exception {
+        // Cover bug 513. When a relevant transaction with a P2PK output is found, the Bloom filter should be
         // recalculated to include that transaction hash but not re-broadcast as the remote nodes should have followed
         // the same procedure. However a new node that's connected should get the fresh filter.
         peerGroup.start();
@@ -616,12 +616,13 @@ public class PeerGroupTest extends TestWithPeerGroup {
         // Create a couple of peers.
         InboundMessageQueuer p1 = connectPeer(1);
         InboundMessageQueuer p2 = connectPeer(2);
-        // Create a pay to pubkey tx.
+        // Create a P2PK tx.
         Transaction tx = FakeTxBuilder.createFakeTx(UNITTEST, COIN, key);
         Transaction tx2 = new Transaction(UNITTEST);
         tx2.addInput(tx.getOutput(0));
         TransactionOutPoint outpoint = tx2.getInput(0).getOutpoint();
         assertTrue(p1.lastReceivedFilter.contains(key.getPubKey()));
+        assertTrue(p1.lastReceivedFilter.contains(key.getPubKeyHash()));
         assertFalse(p1.lastReceivedFilter.contains(tx.getTxId().getBytes()));
         inbound(p1, tx);
         // p1 requests dep resolution, p2 is quiet.
@@ -635,6 +636,7 @@ public class PeerGroupTest extends TestWithPeerGroup {
         // Now we connect p3 and there is a new bloom filter sent, that DOES match the relevant outpoint.
         InboundMessageQueuer p3 = connectPeer(3);
         assertTrue(p3.lastReceivedFilter.contains(key.getPubKey()));
+        assertTrue(p3.lastReceivedFilter.contains(key.getPubKeyHash()));
         assertTrue(p3.lastReceivedFilter.contains(outpoint.unsafeBitcoinSerialize()));
     }
 
