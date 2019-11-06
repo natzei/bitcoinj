@@ -51,7 +51,7 @@ import static org.bitcoinj.script.ScriptOpCodes.*;
 public class ScriptBuilder implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    protected List<ScriptChunk> chunks;
+    private List<ScriptChunk> chunks;
 
     /** Creates a fresh ScriptBuilder with an empty program. */
     public ScriptBuilder() {
@@ -61,6 +61,12 @@ public class ScriptBuilder implements Serializable {
     /** Creates a fresh ScriptBuilder with the given program as the starting point. */
     public ScriptBuilder(Script template) {
         chunks = new ArrayList<>(template.getChunks());
+    }
+
+
+    /** Returns the script chunks. */
+    public List<ScriptChunk> getChunks() {
+        return chunks;
     }
 
     /** Adds the given chunk to the end of the program */
