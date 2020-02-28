@@ -1394,7 +1394,7 @@ public class PeerGroup implements TransactionBroadcaster {
     }
 
     /**
-     * <p>Start downloading the blockchain from the first available peer.</p>
+     * <p>Start downloading the blockchain.</p>
      *
      * <p>If no peers are currently connected, the download will be started once a peer starts.  If the peer dies,
      * the download will resume with another peer.</p>
@@ -1413,12 +1413,6 @@ public class PeerGroup implements TransactionBroadcaster {
                 }
             }
             this.downloadListener = listener;
-            // TODO: be more nuanced about which peer to download from.  We can also try
-            // downloading from multiple peers and handle the case when a new peer comes along
-            // with a longer chain after we thought we were done.
-            if (!peers.isEmpty()) {
-                startBlockChainDownloadFromPeer(peers.iterator().next()); // Will add the new download listener
-            }
         } finally {
             lock.unlock();
         }
@@ -1484,7 +1478,7 @@ public class PeerGroup implements TransactionBroadcaster {
             // TODO: The peer should calculate the fast catchup time from the added wallets here.
             for (Wallet wallet : wallets)
                 peer.addWallet(wallet);
-            if (downloadPeer == null) {
+            if (downloadPeer == null && newSize > maxConnections / 2) {
                 Peer newDownloadPeer = selectDownloadPeer(peers);
                 if (newDownloadPeer != null) {
                     setDownloadPeer(newDownloadPeer);
@@ -1493,6 +1487,8 @@ public class PeerGroup implements TransactionBroadcaster {
                     if (shouldDownloadChain) {
                         startBlockChainDownloadFromPeer(downloadPeer);
                     }
+                } else {
+                    log.info("Not yet setting download peer because there is no clear candidate.");
                 }
             }
             // Make sure the peer knows how to upload transactions that are requested from us.
@@ -1797,7 +1793,7 @@ public class PeerGroup implements TransactionBroadcaster {
                 int chainHeight = chain != null ? chain.getBestChainHeight() : -1;
                 int mostCommonChainHeight = getMostCommonChainHeight();
                 if (!syncDone && mostCommonChainHeight > 0 && chainHeight >= mostCommonChainHeight) {
-                    log.info("End of sync detected.");
+                    log.info("End of sync detected at height {}.", chainHeight);
                     syncDone = true;
                 }
 
@@ -1857,7 +1853,8 @@ public class PeerGroup implements TransactionBroadcaster {
     }
     @Nullable private ChainDownloadSpeedCalculator chainDownloadSpeedCalculator;
 
-    private void startBlockChainDownloadFromPeer(Peer peer) {
+    @VisibleForTesting
+    void startBlockChainDownloadFromPeer(Peer peer) {
         lock.lock();
         try {
             setDownloadPeer(peer);
@@ -2015,12 +2012,13 @@ public class PeerGroup implements TransactionBroadcaster {
     }
 
     /**
-     * Calls {@link PeerGroup#broadcastTransaction(Transaction,int)} with getMinBroadcastConnections() as the number
-     * of connections to wait for before commencing broadcast.
+     * Calls {@link PeerGroup#broadcastTransaction(Transaction, int, boolean)} with getMinBroadcastConnections() as
+     * the number of connections to wait for before commencing broadcast. Also, broadcast peers will be dropped after
+     * the transaction has been sent.
      */
     @Override
     public TransactionBroadcast broadcastTransaction(final Transaction tx) {
-        return broadcastTransaction(tx, Math.max(1, getMinBroadcastConnections()));
+        return broadcastTransaction(tx, Math.max(1, getMinBroadcastConnections()), true);
     }
 
     /**
@@ -2041,7 +2039,8 @@ public class PeerGroup implements TransactionBroadcaster {
      * <p>The returned {@link TransactionBroadcast} object can be used to get progress feedback,
      * which is calculated by watching the transaction propagate across the network and be announced by peers.</p>
      */
-    public TransactionBroadcast broadcastTransaction(final Transaction tx, final int minConnections) {
+    public TransactionBroadcast broadcastTransaction(final Transaction tx, final int minConnections,
+                                                     final boolean dropPeersAfterBroadcast) {
         // If we don't have a record of where this tx came from already, set it to be ourselves so Peer doesn't end up
         // redownloading it from the network redundantly.
         if (tx.getConfidence().getSource().equals(TransactionConfidence.Source.UNKNOWN)) {
@@ -2050,6 +2049,7 @@ public class PeerGroup implements TransactionBroadcaster {
         }
         final TransactionBroadcast broadcast = new TransactionBroadcast(this, tx);
         broadcast.setMinConnections(minConnections);
+        broadcast.setDropPeersAfterBroadcast(dropPeersAfterBroadcast);
         // Send the TX to the wallet once we have a successful broadcast.
         Futures.addCallback(broadcast.future(), new FutureCallback<Transaction>() {
             @Override
@@ -2135,8 +2135,8 @@ public class PeerGroup implements TransactionBroadcaster {
     }
 
     /**
-     * Returns our peers most commonly reported chain height. If multiple heights are tied, the highest is returned.
-     * If no peers are connected, returns zero.
+     * Returns our peers most commonly reported chain height.
+     * If the most common heights are tied, or no peers are connected, returns {@code 0}.
      */
     public int getMostCommonChainHeight() {
         lock.lock();
@@ -2149,14 +2149,49 @@ public class PeerGroup implements TransactionBroadcaster {
 
     /**
      * Returns most commonly reported chain height from the given list of {@link Peer}s.
-     * If multiple heights are tied, the highest is returned. If no peers are connected, returns zero.
+     * If the most common heights are tied, or no peers are connected, returns {@code 0}.
      */
     public static int getMostCommonChainHeight(final List<Peer> peers) {
         if (peers.isEmpty())
             return 0;
         List<Integer> heights = new ArrayList<>(peers.size());
         for (Peer peer : peers) heights.add((int) peer.getBestHeight());
-        return Utils.maxOfMostFreq(heights);
+        return maxOfMostFreq(heights);
+    }
+
+    private static class Pair implements Comparable<Pair> {
+        final int item;
+        int count = 0;
+        public Pair(int item) { this.item = item; }
+        // note that in this implementation compareTo() is not consistent with equals()
+        @Override public int compareTo(Pair o) { return -Integer.compare(count, o.count); }
+    }
+
+    static int maxOfMostFreq(List<Integer> items) {
+        if (items.isEmpty())
+            return 0;
+        // This would be much easier in a functional language (or in Java 8).
+        items = Ordering.natural().reverse().sortedCopy(items);
+        LinkedList<Pair> pairs = new LinkedList<>();
+        pairs.add(new Pair(items.get(0)));
+        for (int item : items) {
+            Pair pair = pairs.getLast();
+            if (pair.item != item)
+                pairs.add((pair = new Pair(item)));
+            pair.count++;
+        }
+        // pairs now contains a uniquified list of the sorted inputs, with counts for how often that item appeared.
+        // Now sort by how frequently they occur, and pick the most frequent. If the first place is tied between two,
+        // don't pick any.
+        Collections.sort(pairs);
+        final Pair firstPair = pairs.get(0);
+        if (pairs.size() == 1)
+            return firstPair.item;
+        final Pair secondPair = pairs.get(1);
+        if (firstPair.count > secondPair.count)
+            return firstPair.item;
+        checkState(firstPair.count == secondPair.count);
+        return 0;
     }
 
     /**
@@ -2171,37 +2206,34 @@ public class PeerGroup implements TransactionBroadcaster {
         //  - Randomly, to try and spread the load.
         if (peers.isEmpty())
             return null;
-        // Make sure we don't select a peer that is behind/synchronizing itself.
+
         int mostCommonChainHeight = getMostCommonChainHeight(peers);
-        List<Peer> candidates = new ArrayList<>();
+        // Make sure we don't select a peer if there is no consensus about block height.
+        if (mostCommonChainHeight == 0)
+            return null;
+
+        // Only select peers that announce the minimum protocol and services and that we think is fully synchronized.
+        List<Peer> candidates = new LinkedList<>();
+        final int MINIMUM_VERSION = params.getProtocolVersionNum(NetworkParameters.ProtocolVersion.WITNESS_VERSION);
         for (Peer peer : peers) {
-            if (!peer.getPeerVersionMessage().hasBlockChain())
+            final VersionMessage versionMessage = peer.getPeerVersionMessage();
+            if (versionMessage.clientVersion < MINIMUM_VERSION)
                 continue;
-            if (peer.getBestHeight() < mostCommonChainHeight)
+            if (!versionMessage.hasBlockChain())
+                continue;
+            if (!versionMessage.isWitnessSupported())
+                continue;
+            final long peerHeight = peer.getBestHeight();
+            if (peerHeight < mostCommonChainHeight || peerHeight > mostCommonChainHeight + 1)
                 continue;
             candidates.add(peer);
         }
-        // Of the candidates, find the peers that meet the minimum protocol version we want to target. We could select
-        // the highest version we've seen on the assumption that newer versions are always better but we don't want to
-        // zap peers if they upgrade early. If we can't find any peers that have our preferred protocol version or
-        // better then we'll settle for the highest we found instead.
-        int highestVersion = 0, preferredVersion = 0;
-        // If/when PREFERRED_VERSION is not equal to vMinRequiredProtocolVersion, reenable the last test in PeerGroupTest.downloadPeerSelection
-        final int PREFERRED_VERSION = params.getProtocolVersionNum(NetworkParameters.ProtocolVersion.BLOOM_FILTER);
-        for (Peer peer : candidates) {
-            highestVersion = Math.max(peer.getPeerVersionMessage().clientVersion, highestVersion);
-            preferredVersion = Math.min(highestVersion, PREFERRED_VERSION);
-        }
-        ArrayList<Peer> candidates2 = new ArrayList<>(candidates.size());
-        for (Peer peer : candidates) {
-            if (peer.getPeerVersionMessage().clientVersion >= preferredVersion) {
-                candidates2.add(peer);
-            }
-        }
-        if (candidates2.isEmpty())
+        if (candidates.isEmpty())
             return null;
-        int index = (int) (Math.random() * candidates2.size());
-        return candidates2.get(index);
+
+        // Random poll.
+        int index = (int) (Math.random() * candidates.size());
+        return candidates.get(index);
     }
 
     /**
