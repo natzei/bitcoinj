@@ -163,11 +163,12 @@ public class TransactionBroadcast {
                 try {
                     ListenableFuture future = peer.sendMessage(tx);
                     if (dropPeersAfterBroadcast) {
-                        // We drop the peer as soon as the transaction has been sent, because this peer will not send us
-                        // back useful broadcast confirmations.
+                        // We drop the peer shortly after the transaction has been sent, because this peer will not
+                        // send us back useful broadcast confirmations.
                         future.addListener(new Runnable() {
                             @Override
                             public void run() {
+                                Uninterruptibles.sleepUninterruptibly(1, TimeUnit.SECONDS);
                                 peer.close();
                             }
                         }, Threading.THREAD_POOL);
@@ -177,14 +178,6 @@ public class TransactionBroadcast {
                 } catch (Exception e) {
                     log.error("Caught exception sending to {}", peer, e);
                 }
-            }
-            // If we've been limited to talk to only one peer, we can't wait to hear back because the
-            // remote peer won't tell us about transactions we just announced to it for obvious reasons.
-            // So we just have to assume we're done, at that point. This happens when we're not given
-            // any peer discovery source and the user just calls connectTo() once.
-            if (minConnections == 1) {
-                peerGroup.removePreMessageReceivedEventListener(rejectionListener);
-                future.set(tx);
             }
         }
     }

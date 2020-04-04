@@ -28,7 +28,6 @@ import org.bitcoinj.utils.Threading;
 import org.bitcoinj.wallet.Wallet;
 
 import com.google.common.base.Function;
-import com.google.common.base.Joiner;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
@@ -69,6 +68,7 @@ public class Peer extends PeerSocketHandler {
 
     private final NetworkParameters params;
     private final AbstractBlockChain blockChain;
+    private final long requiredServices;
     private final Context context;
 
     private final CopyOnWriteArrayList<ListenerRegistration<BlocksDownloadedEventListener>> blocksDownloadedEventListeners
@@ -175,18 +175,8 @@ public class Peer extends PeerSocketHandler {
                 }
             }, MoreExecutors.directExecutor());
 
-    /**
-     * <p>Construct a peer that reads/writes from the given block chain.</p>
-     *
-     * <p>Note that this does <b>NOT</b> make a connection to the given remoteAddress, it only creates a handler for a
-     * connection. If you want to create a one-off connection, create a Peer and pass it to
-     * {@link NioClientManager#openConnection(SocketAddress, StreamConnection)}
-     * or
-     * {@link NioClient#NioClient(SocketAddress, StreamConnection, int)}.</p>
-     *
-     * <p>The remoteAddress provided should match the remote address of the peer which is being connected to, and is
-     * used to keep track of which peers relayed transactions and offer more descriptive logging.</p>
-     */
+    /** @deprecated Use {@link #Peer(NetworkParameters, VersionMessage, PeerAddress, AbstractBlockChain)}. */
+    @Deprecated
     public Peer(NetworkParameters params, VersionMessage ver, @Nullable AbstractBlockChain chain, PeerAddress remoteAddress) {
         this(params, ver, remoteAddress, chain);
     }
@@ -207,7 +197,7 @@ public class Peer extends PeerSocketHandler {
      */
     public Peer(NetworkParameters params, VersionMessage ver, PeerAddress remoteAddress,
                 @Nullable AbstractBlockChain chain) {
-        this(params, ver, remoteAddress, chain, Integer.MAX_VALUE);
+        this(params, ver, remoteAddress, chain, 0, Integer.MAX_VALUE);
     }
 
     /**
@@ -225,12 +215,13 @@ public class Peer extends PeerSocketHandler {
      * used to keep track of which peers relayed transactions and offer more descriptive logging.</p>
      */
     public Peer(NetworkParameters params, VersionMessage ver, PeerAddress remoteAddress,
-                @Nullable AbstractBlockChain chain, int downloadTxDependencyDepth) {
+                @Nullable AbstractBlockChain chain, long requiredServices, int downloadTxDependencyDepth) {
         super(params, remoteAddress);
         this.params = Preconditions.checkNotNull(params);
         this.versionMessage = Preconditions.checkNotNull(ver);
         this.vDownloadTxDependencyDepth = chain != null ? downloadTxDependencyDepth : 0;
         this.blockChain = chain;  // Allowed to be null.
+        this.requiredServices = requiredServices;
         this.vDownloadData = chain != null;
         this.getDataFutures = new CopyOnWriteArrayList<>();
         this.getAddrFutures = new LinkedList<>();
@@ -371,7 +362,7 @@ public class Peer extends PeerSocketHandler {
         helper.addValue(getAddress());
         helper.add("version", vPeerVersionMessage.clientVersion);
         helper.add("subVer", vPeerVersionMessage.subVer);
-        String servicesStr = Strings.emptyToNull(toStringServices(vPeerVersionMessage.localServices));
+        String servicesStr = Strings.emptyToNull(VersionMessage.toStringServices(vPeerVersionMessage.localServices));
         helper.add("services",
                 vPeerVersionMessage.localServices + (servicesStr != null ? " (" + servicesStr + ")" : ""));
         long peerTime = vPeerVersionMessage.time * 1000;
@@ -380,31 +371,9 @@ public class Peer extends PeerSocketHandler {
         return helper.toString();
     }
 
+    @Deprecated
     public String toStringServices(long services) {
-        List<String> a = new LinkedList<>();
-        if ((services & VersionMessage.NODE_NETWORK) == VersionMessage.NODE_NETWORK) {
-            a.add("NETWORK");
-            services &= ~VersionMessage.NODE_NETWORK;
-        }
-        if ((services & VersionMessage.NODE_GETUTXOS) == VersionMessage.NODE_GETUTXOS) {
-            a.add("GETUTXOS");
-            services &= ~VersionMessage.NODE_GETUTXOS;
-        }
-        if ((services & VersionMessage.NODE_BLOOM) == VersionMessage.NODE_BLOOM) {
-            a.add("BLOOM");
-            services &= ~VersionMessage.NODE_BLOOM;
-        }
-        if ((services & VersionMessage.NODE_WITNESS) == VersionMessage.NODE_WITNESS) {
-            a.add("WITNESS");
-            services &= ~VersionMessage.NODE_WITNESS;
-        }
-        if ((services & VersionMessage.NODE_NETWORK_LIMITED) == VersionMessage.NODE_NETWORK_LIMITED) {
-            a.add("NETWORK_LIMITED");
-            services &= ~VersionMessage.NODE_NETWORK_LIMITED;
-        }
-        if (services != 0)
-            a.add("remaining: " + Long.toBinaryString(services));
-        return Joiner.on(", ").join(a);
+        return VersionMessage.toStringServices(services);
     }
 
     @Override
@@ -543,33 +512,39 @@ public class Peer extends PeerSocketHandler {
         future.set(m);
     }
 
-    private void processVersionMessage(VersionMessage m) throws ProtocolException {
+    private void processVersionMessage(VersionMessage peerVersionMessage) throws ProtocolException {
         if (vPeerVersionMessage != null)
             throw new ProtocolException("Got two version messages from peer");
-        vPeerVersionMessage = m;
+        vPeerVersionMessage = peerVersionMessage;
         // Switch to the new protocol version.
         log.info(toString());
         // bitcoinj is a client mode implementation. That means there's not much point in us talking to other client
         // mode nodes because we can't download the data from them we need to find/verify transactions. Some bogus
         // implementations claim to have a block chain in their services field but then report a height of zero, filter
         // them out here.
-        if (!vPeerVersionMessage.hasLimitedBlockChain() ||
-                (!params.allowEmptyPeerChain() && vPeerVersionMessage.bestHeight == 0)) {
+        if (!peerVersionMessage.hasLimitedBlockChain() ||
+                (!params.allowEmptyPeerChain() && peerVersionMessage.bestHeight == 0)) {
             // Shut down the channel gracefully.
             log.info("{}: Peer does not have at least a recent part of the block chain.", this);
             close();
             return;
         }
-        if ((vPeerVersionMessage.localServices
-                & VersionMessage.NODE_BITCOIN_CASH) == VersionMessage.NODE_BITCOIN_CASH) {
+        if ((peerVersionMessage.localServices & requiredServices) != requiredServices) {
+            log.info("{}: Peer doesn't support these required services: {}", this,
+                    VersionMessage.toStringServices(requiredServices & ~peerVersionMessage.localServices));
+            // Shut down the channel gracefully.
+            close();
+            return;
+        }
+        if ((peerVersionMessage.localServices & VersionMessage.NODE_BITCOIN_CASH) == VersionMessage.NODE_BITCOIN_CASH) {
             log.info("{}: Peer follows an incompatible block chain.", this);
             // Shut down the channel gracefully.
             close();
             return;
         }
-        if (vPeerVersionMessage.bestHeight < 0)
+        if (peerVersionMessage.bestHeight < 0)
             // In this case, it's a protocol violation.
-            throw new ProtocolException("Peer reports invalid best height: " + vPeerVersionMessage.bestHeight);
+            throw new ProtocolException("Peer reports invalid best height: " + peerVersionMessage.bestHeight);
         // Now it's our turn ...
         // Send an ACK message stating we accept the peers protocol version.
         sendMessage(new VersionAck());

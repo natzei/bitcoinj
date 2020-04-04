@@ -100,6 +100,7 @@ public class PeerGroup implements TransactionBroadcaster {
     // Addresses to try to connect to, excluding active peers.
     @GuardedBy("lock") private final PriorityQueue<PeerAddress> inactives;
     @GuardedBy("lock") private final Map<PeerAddress, ExponentialBackoff> backoffMap;
+    @GuardedBy("lock") private final Map<PeerAddress, Integer> priorityMap;
 
     // Currently active peers. This is an ordered list rather than a set to make unit tests predictable.
     private final CopyOnWriteArrayList<Peer> peers;
@@ -345,13 +346,18 @@ public class PeerGroup implements TransactionBroadcaster {
             public int compare(PeerAddress a, PeerAddress b) {
                 checkState(lock.isHeldByCurrentThread());
                 int result = backoffMap.get(a).compareTo(backoffMap.get(b));
+                if (result != 0)
+                    return result;
+                result = Integer.compare(getPriority(a), getPriority(b));
+                if (result != 0)
+                    return result;
                 // Sort by port if otherwise equals - for testing
-                if (result == 0)
-                    result = Integer.compare(a.getPort(), b.getPort());
+                result = Integer.compare(a.getPort(), b.getPort());
                 return result;
             }
         });
         backoffMap = new HashMap<>();
+        priorityMap = new ConcurrentHashMap<>();
         peers = new CopyOnWriteArrayList<>();
         pendingPeers = new CopyOnWriteArrayList<>();
         channels = connectionManager;
@@ -857,10 +863,21 @@ public class PeerGroup implements TransactionBroadcaster {
      * @param peerAddress IP/port to use.
      */
     public void addAddress(PeerAddress peerAddress) {
+        addAddress(peerAddress, 0);
+    }
+
+    /**
+     * Add an address to the list of potential peers to connect to. It won't necessarily be used unless there's a need
+     * to build new connections to reach the max connection count.
+     *
+     * @param peerAddress IP/port to use.
+     * @param priority for connecting and being picked as a download peer
+     */
+    public void addAddress(PeerAddress peerAddress, int priority) {
         int newMax;
         lock.lock();
         try {
-            if (addInactive(peerAddress)) {
+            if (addInactive(peerAddress, priority)) {
                 newMax = getMaxConnections() + 1;
                 setMaxConnections(newMax);
             }
@@ -871,18 +888,25 @@ public class PeerGroup implements TransactionBroadcaster {
 
     // Adds peerAddress to backoffMap map and inactives queue.
     // Returns true if it was added, false if it was already there.
-    private boolean addInactive(PeerAddress peerAddress) {
+    private boolean addInactive(PeerAddress peerAddress, int priority) {
         lock.lock();
         try {
             // Deduplicate
             if (backoffMap.containsKey(peerAddress))
                 return false;
             backoffMap.put(peerAddress, new ExponentialBackoff(peerBackoffParams));
+            if (priority != 0)
+                priorityMap.put(peerAddress, priority);
             inactives.offer(peerAddress);
             return true;
         } finally {
             lock.unlock();
         }
+    }
+
+    private int getPriority(PeerAddress peerAddress) {
+        Integer priority = priorityMap.get(peerAddress);
+        return priority != null ? priority : 0;
     }
 
     /**
@@ -901,9 +925,14 @@ public class PeerGroup implements TransactionBroadcaster {
         }
     }
 
-    /** Convenience method for addAddress(new PeerAddress(address, params.port)); */
+    /** Convenience method for {@link #addAddress(PeerAddress)}. */
     public void addAddress(InetAddress address) {
         addAddress(new PeerAddress(params, address, params.getPort()));
+    }
+
+    /** Convenience method for {@link #addAddress(PeerAddress, int)}. */
+    public void addAddress(InetAddress address, int priority) {
+        addAddress(new PeerAddress(params, address, params.getPort()), priority);
     }
 
     /**
@@ -930,7 +959,7 @@ public class PeerGroup implements TransactionBroadcaster {
         final Stopwatch watch = Stopwatch.createStarted();
         final List<PeerAddress> addressList = new LinkedList<>();
         for (PeerDiscovery peerDiscovery : peerDiscoverers /* COW */) {
-            InetSocketAddress[] addresses;
+            List<InetSocketAddress> addresses;
             try {
                 addresses = peerDiscovery.getPeers(requiredServices, peerDiscoveryTimeoutMillis, TimeUnit.MILLISECONDS);
             } catch (PeerDiscoveryException e) {
@@ -942,7 +971,7 @@ public class PeerGroup implements TransactionBroadcaster {
         }
         if (!addressList.isEmpty()) {
             for (PeerAddress address : addressList) {
-                addInactive(address);
+                addInactive(address, 0);
             }
             final ImmutableSet<PeerAddress> peersDiscoveredSet = ImmutableSet.copyOf(addressList);
             for (final ListenerRegistration<PeerDiscoveredEventListener> registration : peerDiscoveredEventListeners /* COW */) {
@@ -1081,6 +1110,19 @@ public class PeerGroup implements TransactionBroadcaster {
             log.info("... took {}", watch);
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Gracefully drops all connected peers.
+     */
+    public void dropAllPeers() {
+        lock.lock();
+        try {
+            for (Peer peer : peers)
+                peer.close();
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -1382,7 +1424,7 @@ public class PeerGroup implements TransactionBroadcaster {
     /** You can override this to customise the creation of {@link Peer} objects. */
     @GuardedBy("lock")
     protected Peer createPeer(PeerAddress address, VersionMessage ver) {
-        return new Peer(params, ver, address, chain, downloadTxDependencyDepth);
+        return new Peer(params, ver, address, chain, requiredServices, downloadTxDependencyDepth);
     }
 
     /**
@@ -2013,8 +2055,8 @@ public class PeerGroup implements TransactionBroadcaster {
 
     /**
      * Calls {@link PeerGroup#broadcastTransaction(Transaction, int, boolean)} with getMinBroadcastConnections() as
-     * the number of connections to wait for before commencing broadcast. Also, broadcast peers will be dropped after
-     * the transaction has been sent.
+     * the number of connections to wait for before commencing broadcast. Also, if the transaction has no broadcast
+     * confirmations yet the peers will be dropped after the transaction has been sent.
      */
     @Override
     public TransactionBroadcast broadcastTransaction(final Transaction tx) {
@@ -2028,6 +2070,9 @@ public class PeerGroup implements TransactionBroadcaster {
      * wrong the exception will be thrown when get() is called, or you can receive it via a callback on the
      * {@link ListenableFuture}. This method returns immediately, so if you want it to block just call get() on the
      * result.</p>
+     *
+     * <p>Optionally, peers will be dropped after they have been used for broadcasting the transaction and they have
+     * no broadcast confirmations yet.</p>
      *
      * <p>Note that if the PeerGroup is limited to only one connection (discovery is not activated) then the future
      * will complete as soon as the transaction was successfully written to that peer.</p>
@@ -2049,7 +2094,7 @@ public class PeerGroup implements TransactionBroadcaster {
         }
         final TransactionBroadcast broadcast = new TransactionBroadcast(this, tx);
         broadcast.setMinConnections(minConnections);
-        broadcast.setDropPeersAfterBroadcast(dropPeersAfterBroadcast);
+        broadcast.setDropPeersAfterBroadcast(dropPeersAfterBroadcast && tx.getConfidence().numBroadcastPeers() == 0);
         // Send the TX to the wallet once we have a successful broadcast.
         Futures.addCallback(broadcast.future(), new FutureCallback<Transaction>() {
             @Override
@@ -2214,6 +2259,7 @@ public class PeerGroup implements TransactionBroadcaster {
 
         // Only select peers that announce the minimum protocol and services and that we think is fully synchronized.
         List<Peer> candidates = new LinkedList<>();
+        int highestPriority = Integer.MIN_VALUE;
         final int MINIMUM_VERSION = params.getProtocolVersionNum(NetworkParameters.ProtocolVersion.WITNESS_VERSION);
         for (Peer peer : peers) {
             final VersionMessage versionMessage = peer.getPeerVersionMessage();
@@ -2227,9 +2273,17 @@ public class PeerGroup implements TransactionBroadcaster {
             if (peerHeight < mostCommonChainHeight || peerHeight > mostCommonChainHeight + 1)
                 continue;
             candidates.add(peer);
+            highestPriority = Math.max(highestPriority, getPriority(peer.peerAddress));
         }
         if (candidates.isEmpty())
             return null;
+
+        // If there is a difference in priority, consider only the highest.
+        for (Iterator<Peer> i = candidates.iterator(); i.hasNext(); ) {
+            Peer peer = i.next();
+            if (getPriority(peer.peerAddress) < highestPriority)
+                i.remove();
+        }
 
         // Random poll.
         int index = (int) (Math.random() * candidates.size());
