@@ -7,10 +7,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # windows-latest currently fails on some tests
-        # TODO: Fix windows issues and add `windows-latest`
-        os: [ubuntu-latest, macOS-latest]
-        java: [ '8', '11', '14' ]
+        os: [ubuntu-latest, macOS-latest, windows-latest]
+        java: [ '8', '11', '15' ]
       fail-fast: false
     name: JAVA ${{ matrix.java }} OS ${{ matrix.os }}
     steps:
@@ -21,3 +19,11 @@ jobs:
           java-version: ${{ matrix.java }}
       - name: Build with Gradle
         run: gradle build --stacktrace
+      - name: Upload Test Results and Reports
+        uses: actions/upload-artifact@v2
+        if: always()
+        with:
+          name: bitcoinj-core-test-results-jdk${{ matrix.java }}-${{ matrix.os }}
+          path: |
+            core/build/reports/tests/test/
+            core/build/test-results/test/
