@@ -59,13 +59,15 @@ public class BitcoinSerializer extends MessageSerializer {
         names.put(Block.class, "block");
         names.put(GetDataMessage.class, "getdata");
         names.put(Transaction.class, "tx");
-        names.put(AddressMessage.class, "addr");
+        names.put(AddressV1Message.class, "addr");
+        names.put(AddressV2Message.class, "addrv2");
         names.put(Ping.class, "ping");
         names.put(Pong.class, "pong");
         names.put(VersionAck.class, "verack");
         names.put(GetBlocksMessage.class, "getblocks");
         names.put(GetHeadersMessage.class, "getheaders");
         names.put(GetAddrMessage.class, "getaddr");
+        names.put(SendAddrV2Message.class, "sendaddrv2");
         names.put(HeadersMessage.class, "headers");
         names.put(BloomFilter.class, "filterload");
         names.put(FilteredBlock.class, "merkleblock");
@@ -75,6 +77,7 @@ public class BitcoinSerializer extends MessageSerializer {
         names.put(GetUTXOsMessage.class, "getutxos");
         names.put(UTXOsMessage.class, "utxos");
         names.put(SendHeadersMessage.class, "sendheaders");
+        names.put(FeeFilterMessage.class, "feefilter");
     }
 
     /**
@@ -215,35 +218,36 @@ public class BitcoinSerializer extends MessageSerializer {
 
     private Message makeMessage(String command, int length, byte[] payloadBytes, byte[] hash, byte[] checksum) throws ProtocolException {
         // We use an if ladder rather than reflection because reflection is very slow on Android.
-        Message message;
         if (command.equals("version")) {
             return new VersionMessage(params, payloadBytes);
         } else if (command.equals("inv")) { 
-            message = makeInventoryMessage(payloadBytes, length);
+            return makeInventoryMessage(payloadBytes, length);
         } else if (command.equals("block")) {
-            message = makeBlock(payloadBytes, length);
+            return makeBlock(payloadBytes, length);
         } else if (command.equals("merkleblock")) {
-            message = makeFilteredBlock(payloadBytes);
+            return makeFilteredBlock(payloadBytes);
         } else if (command.equals("getdata")) {
-            message = new GetDataMessage(params, payloadBytes, this, length);
+            return new GetDataMessage(params, payloadBytes, this, length);
         } else if (command.equals("getblocks")) {
-            message = new GetBlocksMessage(params, payloadBytes);
+            return new GetBlocksMessage(params, payloadBytes);
         } else if (command.equals("getheaders")) {
-            message = new GetHeadersMessage(params, payloadBytes);
+            return new GetHeadersMessage(params, payloadBytes);
         } else if (command.equals("tx")) {
-            message = makeTransaction(payloadBytes, 0, length, hash);
+            return makeTransaction(payloadBytes, 0, length, hash);
+        } else if (command.equals("sendaddrv2")) {
+            return new SendAddrV2Message(params);
         } else if (command.equals("addr")) {
-            message = makeAddressMessage(payloadBytes, length);
+            return makeAddressV1Message(payloadBytes, length);
+        } else if (command.equals("addrv2")) {
+            return makeAddressV2Message(payloadBytes, length);
         } else if (command.equals("ping")) {
-            message = new Ping(params, payloadBytes);
+            return new Ping(params, payloadBytes);
         } else if (command.equals("pong")) {
-            message = new Pong(params, payloadBytes);
+            return new Pong(params, payloadBytes);
         } else if (command.equals("verack")) {
             return new VersionAck(params, payloadBytes);
         } else if (command.equals("headers")) {
             return new HeadersMessage(params, payloadBytes);
-        } else if (command.equals("alert")) {
-            return makeAlertMessage(payloadBytes);
         } else if (command.equals("filterload")) {
             return makeBloomFilter(payloadBytes);
         } else if (command.equals("notfound")) {
@@ -258,11 +262,11 @@ public class BitcoinSerializer extends MessageSerializer {
             return new GetUTXOsMessage(params, payloadBytes);
         } else if (command.equals("sendheaders")) {
             return new SendHeadersMessage(params, payloadBytes);
+        } else if (command.equals("feefilter")) {
+            return new FeeFilterMessage(params, payloadBytes, this, length);
         } else {
-            log.warn("No support for deserializing message with name {}", command);
             return new UnknownMessage(params, command, payloadBytes);
         }
-        return message;
     }
 
     /**
@@ -277,17 +281,17 @@ public class BitcoinSerializer extends MessageSerializer {
      * serialization format support.
      */
     @Override
-    public AddressMessage makeAddressMessage(byte[] payloadBytes, int length) throws ProtocolException {
-        return new AddressMessage(params, payloadBytes, this, length);
+    public AddressV1Message makeAddressV1Message(byte[] payloadBytes, int length) throws ProtocolException {
+        return new AddressV1Message(params, payloadBytes, this, length);
     }
 
     /**
-     * Make an alert message from the payload. Extension point for alternative
+     * Make an address message from the payload. Extension point for alternative
      * serialization format support.
      */
     @Override
-    public Message makeAlertMessage(byte[] payloadBytes) throws ProtocolException {
-        return new AlertMessage(params, payloadBytes);
+    public AddressV2Message makeAddressV2Message(byte[] payloadBytes, int length) throws ProtocolException {
+        return new AddressV2Message(params, payloadBytes, this, length);
     }
 
     /**
