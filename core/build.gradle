@@ -2,10 +2,13 @@ plugins {
     id 'java-library'
     id 'com.google.protobuf'
     id 'maven'
-    id 'eclipse'
+//    id 'eclipse'
 }
 
-version = '0.16.9-LIB'
+//configurations.create('compile')
+//configurations.create('testCompile')
+
+version = '0.16.10-LIB'
 archivesBaseName = 'bitcoinj-core'
 
 dependencies {
