@@ -5,7 +5,11 @@ plugins {
     id 'eclipse'
 }
 
-version = '0.16-SNAPSHOT'
+//configurations.create('compile')
+//configurations.create('testCompile')
+
+version = '0.16.10-LIB'
+archivesBaseName = 'bitcoinj-core'
 
 dependencies {
     api 'org.bouncycastle:bcprov-jdk15to18:1.68'

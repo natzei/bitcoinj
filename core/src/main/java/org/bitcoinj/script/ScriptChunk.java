@@ -24,6 +24,7 @@ import javax.annotation.Nullable;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Objects;
 
@@ -33,7 +34,9 @@ import static org.bitcoinj.script.ScriptOpCodes.*;
 /**
  * A script element that is either a data push (signature, pubkey, etc) or a non-push (logic, numeric, etc) operation.
  */
-public class ScriptChunk {
+public class ScriptChunk implements Serializable {
+    private static final long serialVersionUID = 1L;
+
     /** Operation to be executed. Opcodes are defined in {@link ScriptOpCodes}. */
     public final int opcode;
     /**

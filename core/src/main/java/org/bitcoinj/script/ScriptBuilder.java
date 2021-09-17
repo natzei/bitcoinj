@@ -29,6 +29,9 @@ import org.bitcoinj.crypto.TransactionSignature;
 import org.bitcoinj.script.Script.ScriptType;
 
 import javax.annotation.Nullable;
+
+import java.io.Serializable;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -45,7 +48,9 @@ import static org.bitcoinj.script.ScriptOpCodes.*;
  * convenience methods on {@link Transaction}, but they are useful when working with the
  * protocol at a lower level.</p>
  */
-public class ScriptBuilder {
+public class ScriptBuilder implements Serializable {
+    private static final long serialVersionUID = 1L;
+
     private final List<ScriptChunk> chunks;
 
     /** Creates a fresh ScriptBuilder with an empty program. */
@@ -56,6 +61,12 @@ public class ScriptBuilder {
     /** Creates a fresh ScriptBuilder with the given program as the starting point. */
     public ScriptBuilder(Script template) {
         chunks = new ArrayList<>(template.getChunks());
+    }
+
+
+    /** Returns the script chunks. */
+    public List<ScriptChunk> getChunks() {
+        return chunks;
     }
 
     /** Adds the given chunk to the end of the program */
