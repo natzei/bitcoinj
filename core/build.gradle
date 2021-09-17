@@ -8,7 +8,7 @@ plugins {
 //configurations.create('compile')
 //configurations.create('testCompile')
 
-version = '0.16.10-LIB'
+version = '0.16.11-LIB'
 archivesBaseName = 'bitcoinj-core'
 
 dependencies {
@@ -73,4 +73,12 @@ task sourcesJar(type: Jar, dependsOn: classes) {
 artifacts {
     archives sourcesJar
     archives javadocJar
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+        }
+    }
 }
