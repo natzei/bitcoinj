@@ -8,7 +8,7 @@ plugins {
 //configurations.create('compile')
 //configurations.create('testCompile')
 
-version = '0.16.11-LIB'
+version = '0.16.12-LIB'
 archivesBaseName = 'bitcoinj-core'
 
 dependencies {
