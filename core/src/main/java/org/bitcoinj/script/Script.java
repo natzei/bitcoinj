@@ -59,7 +59,8 @@ public class Script {
         P2PK(2), // pay to pubkey
         P2SH(3), // pay to script hash
         P2WPKH(4), // pay to witness pubkey hash
-        P2WSH(5); // pay to witness script hash
+        P2WSH(5), // pay to witness script hash
+        P2TR(6); // pay to taproot
 
         public final int id;
 
@@ -283,6 +284,8 @@ public class Script {
             return LegacyAddress.fromKey(params, ECKey.fromPublicOnly(ScriptPattern.extractKeyFromP2PK(this)));
         else if (ScriptPattern.isP2WH(this))
             return SegwitAddress.fromHash(params, ScriptPattern.extractHashFromP2WH(this));
+        else if (ScriptPattern.isP2TR(this))
+            return SegwitAddress.fromProgram(params, 1, ScriptPattern.extractOutputKeyFromP2TR(this));
         else
             throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Cannot cast this script to an address");
     }
@@ -603,7 +606,12 @@ public class Script {
             // scriptSig is empty
             // witness: <sig> <pubKey>
             int compressedPubKeySize = 33;
-            return SIG_SIZE + (pubKey != null ? pubKey.getPubKey().length : compressedPubKeySize);
+            int publicKeyLength = pubKey != null ? pubKey.getPubKey().length : compressedPubKeySize;
+            return VarInt.sizeOf(2) // number of witness pushes
+                    + VarInt.sizeOf(SIG_SIZE) // size of signature push
+                    + SIG_SIZE // signature push
+                    + VarInt.sizeOf(publicKeyLength) // size of pubKey push
+                    + publicKeyLength; // pubKey push
         } else {
             throw new IllegalStateException("Unsupported script type");
         }
@@ -793,7 +801,8 @@ public class Script {
                     opcode == OP_INVERT || opcode == OP_AND || opcode == OP_OR || opcode == OP_XOR ||
                     opcode == OP_2MUL || opcode == OP_2DIV || opcode == OP_MUL || opcode == OP_DIV ||
                     opcode == OP_MOD || opcode == OP_LSHIFT || opcode == OP_RSHIFT)
-                throw new ScriptException(ScriptError.SCRIPT_ERR_DISABLED_OPCODE, "Script included a disabled Script Op.");
+                throw new ScriptException(ScriptError.SCRIPT_ERR_DISABLED_OPCODE,
+                        "Script included disabled Script Op " + ScriptOpCodes.getOpCodeName(opcode));
 
             if (shouldExecute && OP_0 <= opcode && opcode <= OP_PUSHDATA4) {
                 // Check minimal push
@@ -1676,6 +1685,8 @@ public class Script {
             return ScriptType.P2WPKH;
         if (ScriptPattern.isP2WSH(this))
             return ScriptType.P2WSH;
+        if (ScriptPattern.isP2TR(this))
+            return ScriptType.P2TR;
         return null;
     }
 
