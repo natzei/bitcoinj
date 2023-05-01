@@ -24,7 +24,7 @@ jobs:
       - name: Install native-image plugin
         run: gu install native-image
       - name: Build with Gradle
-        uses: gradle/gradle-build-action@v1
+        uses: gradle/gradle-build-action@v2.4.2
         with:
           gradle-version: ${{ matrix.gradle }}
           arguments: test nativeCompile --info --stacktrace
