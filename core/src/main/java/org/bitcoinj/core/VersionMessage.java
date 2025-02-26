@@ -44,7 +44,7 @@ import java.util.Objects;
 public class VersionMessage extends Message {
 
     /** The version of this library release, as a string. */
-    public static final String BITCOINJ_VERSION = "0.16.1";
+    public static final String BITCOINJ_VERSION = "0.16.5";
     /** The value that is prepended to the subVer field of this application. */
     public static final String LIBRARY_SUBVER = "/bitcoinj:" + BITCOINJ_VERSION + "/";
 
@@ -56,8 +56,12 @@ public class VersionMessage extends Message {
     public static final int NODE_BLOOM = 1 << 2;
     /** Indicates that a node can be asked for blocks and transactions including witness data. */
     public static final int NODE_WITNESS = 1 << 3;
+    /** Indicates the node will service basic block filter requests (BIP157, BIP158). */
+    public static final int NODE_COMPACT_FILTERS = 1 << 6;
     /** A service bit that denotes whether the peer has at least the last two days worth of blockchain (BIP159). */
     public static final int NODE_NETWORK_LIMITED = 1 << 10;
+    /** Indicates the node supports BIP324 transport. */
+    public static final int NODE_P2P_V2 = 1 << 11;
     /** A service bit used by Bitcoin-ABC to announce Bitcoin Cash nodes. */
     public static final int NODE_BITCOIN_CASH = 1 << 5;
 
@@ -329,9 +333,17 @@ public class VersionMessage extends Message {
             strings.add("WITNESS");
             services &= ~NODE_WITNESS;
         }
+        if ((services & NODE_COMPACT_FILTERS) == NODE_COMPACT_FILTERS) {
+            strings.add("COMPACT_FILTERS");
+            services &= ~NODE_COMPACT_FILTERS;
+        }
         if ((services & NODE_NETWORK_LIMITED) == NODE_NETWORK_LIMITED) {
             strings.add("NETWORK_LIMITED");
             services &= ~NODE_NETWORK_LIMITED;
+        }
+        if ((services & NODE_P2P_V2) == NODE_P2P_V2) {
+            strings.add("P2P_V2");
+            services &= ~NODE_P2P_V2;
         }
         if (services != 0)
             strings.add("remaining: " + Long.toBinaryString(services));
